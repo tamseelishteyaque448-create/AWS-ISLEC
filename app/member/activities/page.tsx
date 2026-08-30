@@ -1,0 +1,2 @@
+import { ActivityList } from "@/components/cards/ActivityList"; import { PageIntro } from "@/components/cards/PageIntro"; import { Topline } from "@/components/ui/Topline"; import { mockRepository } from "@/lib/services";
+export default function Activities() { return <><Topline section="Everything you have done" /><PageIntro kicker="Activity log" title="Keep the trail visible." description="A simple record of your learning, building, and showing up." /><ActivityList activities={mockRepository.getActivities()} /></>; }

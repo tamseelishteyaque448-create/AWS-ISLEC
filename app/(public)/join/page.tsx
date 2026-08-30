@@ -1,0 +1,1 @@
+import { PublicPlaceholder } from "@/components/cards/PublicPlaceholder"; export default function JoinPage() { return <PublicPlaceholder eyebrow="Join community" title="Your next build has company." description="Community onboarding will be added here. This prototype uses the existing mock member workspace—no account is required." />; }

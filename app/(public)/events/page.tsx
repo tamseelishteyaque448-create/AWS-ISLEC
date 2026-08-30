@@ -1,0 +1,1 @@
+import { PublicPlaceholder } from "@/components/cards/PublicPlaceholder"; export default function EventsPage() { return <PublicPlaceholder eyebrow="Events / coming soon" title="Make room for serendipity." description="The public events calendar is being prepared. Current member gatherings are available in the workspace." />; }

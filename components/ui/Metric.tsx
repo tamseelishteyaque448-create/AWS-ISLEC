@@ -1,0 +1,1 @@
+export function Metric({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="panel"><h2>{label}</h2><div className="metric">{value}</div><div className="muted">{detail}</div></div>; }

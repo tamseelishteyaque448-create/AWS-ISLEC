@@ -1,0 +1,1 @@
+import { PublicPlaceholder } from "@/components/cards/PublicPlaceholder"; export default function ExplorePage() { return <PublicPlaceholder eyebrow="Community / coming soon" title="Explore what members are building." description="Public community discovery is taking shape. Step into the Member Workspace to see projects and activity today." />; }

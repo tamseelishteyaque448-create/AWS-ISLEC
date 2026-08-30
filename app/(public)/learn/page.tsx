@@ -1,0 +1,1 @@
+import { PublicPlaceholder } from "@/components/cards/PublicPlaceholder"; export default function LearnPage() { return <PublicPlaceholder eyebrow="Learning / coming soon" title="Learn by building in public." description="The public learning library is on its way. Member learning paths and challenges are ready in the workspace." />; }

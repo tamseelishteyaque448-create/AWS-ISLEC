@@ -1,0 +1,1 @@
+export function PageIntro({ kicker, title, description }: { kicker: string; title: string; description: string }) { return <header className="page-intro"><div className="eyebrow">{kicker}</div><h1>{title}</h1><p className="hero-copy">{description}</p></header>; }

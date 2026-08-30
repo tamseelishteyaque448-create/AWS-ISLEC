@@ -1,0 +1,1 @@
+import { PublicPlaceholder } from "@/components/cards/PublicPlaceholder"; export default function AboutPage() { return <PublicPlaceholder eyebrow="About AWS ISLEC" title="A community for builders in motion." description="We are making a clearer public introduction to AWS ISLEC. Until then, the Member Workspace shows the community in action." />; }

@@ -1,0 +1,1 @@
+import { PublicPlaceholder } from "@/components/cards/PublicPlaceholder"; export default function ProjectsPage() { return <PublicPlaceholder eyebrow="Projects / coming soon" title="Useful work starts with a first build." description="Public project stories will live here. For now, visit the Member Workspace to see active project progress." />; }
