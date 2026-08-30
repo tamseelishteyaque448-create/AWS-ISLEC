@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Compass, FolderKanban, Home, Map, Medal, Rocket, Trophy, UserRound } from "lucide-react";
+import { Activity, CalendarDays, Compass, FolderKanban, Home, Map, Medal, Rocket, Trophy, UserRound } from "lucide-react";
 
 const links = [
-  { label: "Workspace", items: [["/member", "Overview", Home], ["/member/explore", "Explore", Compass], ["/member/learn", "Learn", Rocket], ["/member/projects", "Projects", FolderKanban]] },
+  { label: "Workspace", items: [["/member", "Overview", Home], ["/member/explore", "Explore", Compass], ["/member/learn", "Learn", Rocket], ["/member/projects", "Projects", FolderKanban], ["/member/activities", "Activity", Activity]] },
   { label: "Community", items: [["/member/events", "Events", CalendarDays], ["/member/leaderboard", "Leaderboard", Trophy], ["/member/achievements", "Proof", Medal], ["/member/journey", "Journey", Map], ["/member/profile", "Profile", UserRound]] },
 ] as const;
 
