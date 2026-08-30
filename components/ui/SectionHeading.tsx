@@ -1,1 +1,0 @@
-export function SectionHeading({ title, action }: { title: string; action?: string }) { return <div className="section-heading"><h2>{title}</h2>{action && <span className="section-action">{action} →</span>}</div>; }
