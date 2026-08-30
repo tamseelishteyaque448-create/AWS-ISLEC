@@ -10,3 +10,5 @@ out/
 
 *.msi
 *.tsbuildinfo
+.vercel
+.env*
