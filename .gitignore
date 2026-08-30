@@ -12,3 +12,7 @@ out/
 *.tsbuildinfo
 .vercel
 .env*
+!.env.example
+
+supabase/.temp/
+supabase/.branches/
