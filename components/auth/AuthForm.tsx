@@ -4,10 +4,24 @@ import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, LogIn, UserPlus } from "lucide-react";
 import { getSafeNext } from "@/lib/auth/redirect";
-import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 type Mode = "login" | "signup";
+type AuthAction = "login" | "signup" | "resend";
+
+async function submitAuth(action: AuthAction, email: string, next: string, password?: string) {
+  const response = await fetch("/api/auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, email, password, next }),
+  });
+  const result = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    session?: boolean;
+  };
+
+  return { error: result.error, session: result.session ?? false };
+}
 
 export function AuthForm() {
   const searchParams = useSearchParams();
@@ -37,14 +51,12 @@ export function AuthForm() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-
       if (mode === "login") {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        const { error: signInError } = await submitAuth("login", email, next, password);
 
         if (signInError) {
-          const isEmailUnconfirmed = signInError.message.toLowerCase().includes("email not confirmed");
-          setError(isEmailUnconfirmed ? "Please confirm your email before logging in." : signInError.message);
+          const isEmailUnconfirmed = signInError.toLowerCase().includes("email not confirmed");
+          setError(isEmailUnconfirmed ? "Please confirm your email before logging in." : signInError);
           setCanResendConfirmation(isEmailUnconfirmed);
           setIsLoading(false);
           return;
@@ -55,22 +67,16 @@ export function AuthForm() {
         return;
       }
 
-      const callbackUrl = new URL("/auth/callback", window.location.origin);
-      callbackUrl.searchParams.set("next", next);
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: callbackUrl.toString() },
-      });
+      const { session, error: signUpError } = await submitAuth("signup", email, next, password);
 
       if (signUpError) {
-        const isRateLimited = signUpError.message.toLowerCase().includes("rate limit");
-        setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before trying again, or use Log in after confirming the account." : signUpError.message);
+        const isRateLimited = signUpError.toLowerCase().includes("rate limit");
+        setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before trying again, or use Log in after confirming the account." : signUpError);
         setIsLoading(false);
         return;
       }
 
-      if (data.session) {
+      if (session) {
         setSuccess("Your account is ready. Opening your workspace…");
         window.location.assign(next);
         return;
@@ -92,17 +98,11 @@ export function AuthForm() {
     setIsLoading(true);
 
     try {
-      const callbackUrl = new URL("/auth/callback", window.location.origin);
-      callbackUrl.searchParams.set("next", next);
-      const { error: resendError } = await createClient().auth.resend({
-        type: "signup",
-        email,
-        options: { emailRedirectTo: callbackUrl.toString() },
-      });
+      const { error: resendError } = await submitAuth("resend", email, next);
 
       if (resendError) {
-        const isRateLimited = resendError.message.toLowerCase().includes("rate limit");
-        setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before requesting another confirmation email." : resendError.message);
+        const isRateLimited = resendError.toLowerCase().includes("rate limit");
+        setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before requesting another confirmation email." : resendError);
         setIsLoading(false);
         return;
       }
