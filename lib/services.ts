@@ -64,6 +64,11 @@ export type DashboardChallenge = LearningChallenge & {
   status: string;
 };
 
+export type MemberChallenge = LearningChallenge & {
+  progress: number;
+  status: "not_started" | "in_progress" | "completed";
+};
+
 export type DashboardData = {
   profile: MemberProfile;
   nextChallenge: DashboardChallenge | null;
@@ -90,6 +95,13 @@ class LearningCatalogueError extends Error {
   constructor() {
     super("Unable to load the learning catalogue.");
     this.name = "LearningCatalogueError";
+  }
+}
+
+class ChallengeListError extends Error {
+  constructor() {
+    super("Unable to load challenges.");
+    this.name = "ChallengeListError";
   }
 }
 
@@ -276,6 +288,41 @@ export const supabaseRepository = {
     }
 
     return (data as ActivityRow[]).map(mapDashboardActivity);
+  },
+
+  async getChallenges(): Promise<MemberChallenge[]> {
+    const claims = await getAuthenticatedClaims();
+
+    if (!claims?.sub) {
+      return [];
+    }
+
+    const supabase = await createClient();
+    const [challengesResult, progressResult] = await Promise.all([
+      supabase
+        .from("challenges")
+        .select("id, learning_path_id, slug, title, detail, level, points, sort_order")
+        .eq("is_published", true)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("user_challenge_progress")
+        .select("challenge_id, progress, status")
+        .eq("profile_id", claims.sub),
+    ]);
+
+    if (challengesResult.error || progressResult.error) {
+      throw new ChallengeListError();
+    }
+
+    const progressByChallenge = new Map(
+      (progressResult.data as ProgressRow[]).map((progress) => [progress.challenge_id, progress]),
+    );
+
+    return challengesResult.data.map((challenge) => ({
+      ...mapChallenge(challenge),
+      progress: progressByChallenge.get(challenge.id)?.progress ?? 0,
+      status: (progressByChallenge.get(challenge.id)?.status ?? "not_started") as MemberChallenge["status"],
+    }));
   },
 
   async getLearningCatalogue() {

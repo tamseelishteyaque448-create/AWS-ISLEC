@@ -11,10 +11,14 @@ type Mode = "login" | "signup";
 
 export function AuthForm() {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<Mode>("signup");
+  const [mode, setMode] = useState<Mode>(() =>
+    searchParams.get("mode") === "login" ? "login" : "signup",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [canResendConfirmation, setCanResendConfirmation] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("auth") === "callback-error" ? "We could not confirm that sign-in link. Please try again." : null);
   const [success, setSuccess] = useState<string | null>(null);
   const next = getSafeNext(searchParams.get("next"));
@@ -30,46 +34,91 @@ export function AuthForm() {
 
     setError(null);
     setSuccess(null);
+    setCanResendConfirmation(false);
+    setRateLimited(false);
     setIsLoading(true);
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    if (mode === "login") {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (mode === "login") {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-      if (signInError) {
-        setError(signInError.message);
+        if (signInError) {
+          const isEmailUnconfirmed = signInError.message.toLowerCase().includes("email not confirmed");
+          setError(isEmailUnconfirmed ? "Please confirm your email before logging in." : signInError.message);
+          setCanResendConfirmation(isEmailUnconfirmed);
+          setIsLoading(false);
+          return;
+        }
+
+        setSuccess("Welcome back. Opening your workspace…");
+        window.location.assign(next);
+        return;
+      }
+
+      const callbackUrl = new URL("/auth/callback", window.location.origin);
+      callbackUrl.searchParams.set("next", next);
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: callbackUrl.toString() },
+      });
+
+      if (signUpError) {
+        const isRateLimited = signUpError.message.toLowerCase().includes("rate limit");
+        setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before trying again, or use Log in after confirming the account." : signUpError.message);
+        setRateLimited(isRateLimited);
         setIsLoading(false);
         return;
       }
 
-      setSuccess("Welcome back. Opening your workspace…");
-      window.location.assign(next);
-      return;
-    }
+      if (data.session) {
+        setSuccess("Your account is ready. Opening your workspace…");
+        window.location.assign(next);
+        return;
+      }
 
-    const callbackUrl = new URL("/auth/callback", window.location.origin);
-    callbackUrl.searchParams.set("next", next);
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: callbackUrl.toString() },
-    });
-
-    if (signUpError) {
-      setError(signUpError.message);
+      setSuccess("Check your email to confirm your account, then we’ll open your workspace.");
       setIsLoading(false);
-      return;
+    } catch {
+      setError("We could not reach the sign-in service. Check your connection and try again.");
+      setIsLoading(false);
     }
+  }
 
-    if (data.session) {
-      setSuccess("Your account is ready. Opening your workspace…");
-      window.location.assign(next);
-      return;
+  async function resendConfirmation() {
+    if (!email || !supabaseConfigured) return;
+
+    setError(null);
+    setSuccess(null);
+    setRateLimited(false);
+    setIsLoading(true);
+
+    try {
+      const callbackUrl = new URL("/auth/callback", window.location.origin);
+      callbackUrl.searchParams.set("next", next);
+      const { error: resendError } = await createClient().auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: callbackUrl.toString() },
+      });
+
+      if (resendError) {
+        const isRateLimited = resendError.message.toLowerCase().includes("rate limit");
+        setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before requesting another confirmation email." : resendError.message);
+        setRateLimited(isRateLimited);
+        setIsLoading(false);
+        return;
+      }
+
+      setSuccess("Confirmation email sent. Open the link, then you will be taken to your workspace.");
+      setCanResendConfirmation(false);
+      setIsLoading(false);
+    } catch {
+      setError("We could not reach the sign-in service. Check your connection and try again.");
+      setIsLoading(false);
     }
-
-    setSuccess("Check your email to confirm your account, then we’ll open your workspace.");
-    setIsLoading(false);
   }
 
   const isLogin = mode === "login";
@@ -77,8 +126,8 @@ export function AuthForm() {
   return (
     <section className="auth-card" id="member-access" aria-labelledby="auth-title">
       <div className="auth-tabs" role="tablist" aria-label="Account access">
-        <button className={isLogin ? "active" : ""} type="button" role="tab" aria-selected={isLogin} onClick={() => { setMode("login"); setError(null); setSuccess(null); }}>Log in</button>
-        <button className={!isLogin ? "active" : ""} type="button" role="tab" aria-selected={!isLogin} onClick={() => { setMode("signup"); setError(null); setSuccess(null); }}>Create account</button>
+        <button className={isLogin ? "active" : ""} type="button" role="tab" aria-selected={isLogin} onClick={() => { setMode("login"); setError(null); setSuccess(null); setCanResendConfirmation(false); setRateLimited(false); }}>Log in</button>
+        <button className={!isLogin ? "active" : ""} type="button" role="tab" aria-selected={!isLogin} onClick={() => { setMode("signup"); setError(null); setSuccess(null); setCanResendConfirmation(false); setRateLimited(false); }}>Create account</button>
       </div>
       <div className="auth-card-copy">
         <div className="eyebrow">Member access</div>
@@ -93,7 +142,8 @@ export function AuthForm() {
         <input id="auth-password" name="password" type="password" autoComplete={isLogin ? "current-password" : "new-password"} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required disabled={isLoading || !supabaseConfigured} />
         {error ? <p className="auth-message error" role="alert">{error}</p> : null}
         {success ? <p className="auth-message success" role="status"><CheckCircle2 size={16} aria-hidden="true" />{success}</p> : null}
-        <button className="button auth-submit" type="submit" disabled={isLoading || !supabaseConfigured}>
+        {canResendConfirmation ? <button className="button button-secondary auth-submit" type="button" onClick={resendConfirmation} disabled={isLoading}>Resend confirmation email</button> : null}
+        <button className="button auth-submit" type="submit" disabled={isLoading || !supabaseConfigured || rateLimited}>
           {isLoading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
           {isLogin ? <LogIn size={16} aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
         </button>

@@ -5,6 +5,7 @@ import { getSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/env";
 export async function updateSession(request: NextRequest) {
   const redirectUrl = request.nextUrl.clone();
   redirectUrl.pathname = "/join";
+  redirectUrl.searchParams.set("mode", "login");
   redirectUrl.searchParams.set(
     "next",
     `${request.nextUrl.pathname}${request.nextUrl.search}`,

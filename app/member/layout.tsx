@@ -6,7 +6,7 @@ export default async function MemberLayout({ children }: Readonly<{ children: Re
   const claims = await getAuthenticatedClaims();
 
   if (!claims) {
-    redirect("/join?next=/member");
+    redirect("/join?mode=login&next=/member");
   }
 
   return <div className="shell"><Sidebar /><main className="main">{children}</main></div>;
