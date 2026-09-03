@@ -18,7 +18,6 @@ export function AuthForm() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [canResendConfirmation, setCanResendConfirmation] = useState(false);
-  const [rateLimited, setRateLimited] = useState(false);
   const [error, setError] = useState<string | null>(searchParams.get("auth") === "callback-error" ? "We could not confirm that sign-in link. Please try again." : null);
   const [success, setSuccess] = useState<string | null>(null);
   const next = getSafeNext(searchParams.get("next"));
@@ -35,7 +34,6 @@ export function AuthForm() {
     setError(null);
     setSuccess(null);
     setCanResendConfirmation(false);
-    setRateLimited(false);
     setIsLoading(true);
 
     try {
@@ -68,7 +66,6 @@ export function AuthForm() {
       if (signUpError) {
         const isRateLimited = signUpError.message.toLowerCase().includes("rate limit");
         setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before trying again, or use Log in after confirming the account." : signUpError.message);
-        setRateLimited(isRateLimited);
         setIsLoading(false);
         return;
       }
@@ -92,7 +89,6 @@ export function AuthForm() {
 
     setError(null);
     setSuccess(null);
-    setRateLimited(false);
     setIsLoading(true);
 
     try {
@@ -107,7 +103,6 @@ export function AuthForm() {
       if (resendError) {
         const isRateLimited = resendError.message.toLowerCase().includes("rate limit");
         setError(isRateLimited ? "Email sending is temporarily rate-limited. Wait a few minutes before requesting another confirmation email." : resendError.message);
-        setRateLimited(isRateLimited);
         setIsLoading(false);
         return;
       }
@@ -126,8 +121,8 @@ export function AuthForm() {
   return (
     <section className="auth-card" id="member-access" aria-labelledby="auth-title">
       <div className="auth-tabs" role="tablist" aria-label="Account access">
-        <button className={isLogin ? "active" : ""} type="button" role="tab" aria-selected={isLogin} onClick={() => { setMode("login"); setError(null); setSuccess(null); setCanResendConfirmation(false); setRateLimited(false); }}>Log in</button>
-        <button className={!isLogin ? "active" : ""} type="button" role="tab" aria-selected={!isLogin} onClick={() => { setMode("signup"); setError(null); setSuccess(null); setCanResendConfirmation(false); setRateLimited(false); }}>Create account</button>
+        <button className={isLogin ? "active" : ""} type="button" role="tab" aria-selected={isLogin} onClick={() => { setMode("login"); setError(null); setSuccess(null); setCanResendConfirmation(false); }}>Log in</button>
+        <button className={!isLogin ? "active" : ""} type="button" role="tab" aria-selected={!isLogin} onClick={() => { setMode("signup"); setError(null); setSuccess(null); setCanResendConfirmation(false); }}>Create account</button>
       </div>
       <div className="auth-card-copy">
         <div className="eyebrow">Member access</div>
@@ -143,7 +138,7 @@ export function AuthForm() {
         {error ? <p className="auth-message error" role="alert">{error}</p> : null}
         {success ? <p className="auth-message success" role="status"><CheckCircle2 size={16} aria-hidden="true" />{success}</p> : null}
         {canResendConfirmation ? <button className="button button-secondary auth-submit" type="button" onClick={resendConfirmation} disabled={isLoading}>Resend confirmation email</button> : null}
-        <button className="button auth-submit" type="submit" disabled={isLoading || !supabaseConfigured || rateLimited}>
+        <button className="button auth-submit" type="submit" disabled={isLoading || !supabaseConfigured}>
           {isLoading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
           {isLogin ? <LogIn size={16} aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
         </button>
