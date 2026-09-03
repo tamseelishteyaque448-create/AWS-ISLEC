@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, Handshake, HeartHandshake, Lightbulb, Rocket, Sparkles, UsersRound } from "lucide-react";
+import { ArrowRight, BookOpen, Handshake, HeartHandshake, Lightbulb, Rocket, UsersRound } from "lucide-react";
+import { AuthForm } from "@/components/auth/AuthForm";
 import { mockRepository } from "@/lib/services";
 
 const journey = [
@@ -22,7 +24,7 @@ export default function JoinPage() {
   const events = mockRepository.getEvents();
 
   return <>
-    <section className="join-hero"><div><div className="eyebrow">Join AWS ISLEC</div><h1>Your next build<br />has <span>company.</span></h1><p>Join a student technology community where learning becomes practice, practice becomes projects, and nobody has to figure out the hard parts alone.</p><div className="hero-actions"><Link className="button" href="/member">Enter the member workspace <ArrowRight size={16} aria-hidden="true" /></Link><Link className="button button-secondary" href="/explore">Explore the community</Link></div><small className="join-hero-note">No account required for this prototype.</small></div><aside className="join-welcome" aria-label="What new members can expect"><div className="eyebrow">A place to begin</div><h2>Bring your curiosity.<br />We will meet you there.</h2><div>{["Pick a path that feels useful.", "Make something small and real.", "Find the people who keep you moving."].map((item) => <span key={item}><Sparkles size={15} aria-hidden="true" />{item}</span>)}</div></aside></section>
+    <section className="join-hero"><div><div className="eyebrow">Join AWS ISLEC</div><h1>Your next build<br />has <span>company.</span></h1><p>Join a student technology community where learning becomes practice, practice becomes projects, and nobody has to figure out the hard parts alone.</p><div className="hero-actions"><a className="button" href="#member-access">Join the member workspace <ArrowRight size={16} aria-hidden="true" /></a><Link className="button button-secondary" href="/explore">Explore the community</Link></div><small className="join-hero-note">Member access is secured with your AWS ISLEC account.</small></div><Suspense fallback={<div className="join-welcome" aria-busy="true">Loading member access…</div>}><AuthForm /></Suspense></section>
 
     <section className="join-section" aria-labelledby="who-title"><div className="join-section-heading"><div><div className="eyebrow">Who this is for</div><h2 id="who-title">You do not have to arrive as an expert.</h2></div><p>AWS ISLEC is for students who want a more practical, more human way into technology.</p></div><div className="join-member-grid">{memberTypes.map(([title, detail], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{detail}</p></article>)}</div></section>
 
@@ -30,6 +32,6 @@ export default function JoinPage() {
 
     <section className="join-section" aria-labelledby="journey-title"><div className="join-section-heading"><div><div className="eyebrow">Your first loop</div><h2 id="journey-title">A good start is all you need.</h2></div><p>The community journey is not a ladder you need to climb. It is a loop you can enter wherever you are.</p></div><ol className="join-journey">{journey.map(({ icon: Icon, step, title }, index) => <li key={step}><span className={index === journey.length - 1 ? "join-journey-icon lead" : "join-journey-icon"}><Icon size={19} aria-hidden="true" /></span><div><span className="growth-step">{step}</span><h3>{title}</h3></div></li>)}</ol></section>
 
-    <section className="join-workspace" aria-labelledby="workspace-title"><div><div className="eyebrow">Ready when you are</div><h2 id="workspace-title">Take your first step inside.</h2><p>The member workspace is where paths, projects, events, and your own momentum come together. Explore it now—this prototype does not require sign-in.</p></div><div className="join-workspace-actions"><Link className="button" href="/member">Open member workspace <ArrowRight size={16} aria-hidden="true" /></Link><Link href="/about">Read our story <ArrowRight size={15} aria-hidden="true" /></Link></div></section>
+    <section className="join-workspace" aria-labelledby="workspace-title"><div><div className="eyebrow">Ready when you are</div><h2 id="workspace-title">Take your first step inside.</h2><p>The member workspace is where paths, projects, events, and your own momentum come together. Create an account or log in to make it yours.</p></div><div className="join-workspace-actions"><a className="button" href="#member-access">Open member workspace <ArrowRight size={16} aria-hidden="true" /></a><Link href="/about">Read our story <ArrowRight size={15} aria-hidden="true" /></Link></div></section>
   </>;
 }
