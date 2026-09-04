@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/env";
+import type { Database } from "@/lib/types/database";
 
 export async function updateSession(request: NextRequest) {
   const redirectUrl = request.nextUrl.clone();
@@ -19,7 +20,7 @@ export async function updateSession(request: NextRequest) {
   const { supabaseUrl, supabasePublishableKey } = getSupabaseEnv();
   const response = NextResponse.next({ request });
 
-  const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
+  const supabase = createServerClient<Database>(supabaseUrl, supabasePublishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -41,6 +42,17 @@ export async function updateSession(request: NextRequest) {
 
   if (error || !data?.claims) {
     return NextResponse.redirect(redirectUrl);
+  }
+
+  if (request.nextUrl.pathname === "/admin" || request.nextUrl.pathname.startsWith("/admin/")) {
+    const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
+
+    if (adminError || !isAdmin) {
+      const memberUrl = request.nextUrl.clone();
+      memberUrl.pathname = "/member";
+      memberUrl.search = "";
+      return NextResponse.redirect(memberUrl);
+    }
   }
 
   return response;
