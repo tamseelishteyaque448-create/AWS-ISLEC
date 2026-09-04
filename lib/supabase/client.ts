@@ -1,9 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import type { Database } from "@/lib/types/database";
 
-/** Creates a cookie-backed Supabase client for Client Components. */
 export function createClient() {
   const { supabaseUrl, supabasePublishableKey } = getSupabaseEnv();
-
-  return createBrowserClient(supabaseUrl, supabasePublishableKey);
+  return createBrowserClient<Database>(supabaseUrl, supabasePublishableKey);
 }

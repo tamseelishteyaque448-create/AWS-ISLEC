@@ -24,3 +24,17 @@ export async function requireAdmin() {
 
   return claims;
 }
+
+/** Returns claims only when the current request belongs to an allowlisted Admin. */
+export async function getAuthenticatedAdminClaims() {
+  const claims = await getAuthenticatedClaims();
+
+  if (!claims?.sub) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data: isAdmin, error } = await supabase.rpc("is_admin");
+
+  return error || !isAdmin ? null : claims;
+}
