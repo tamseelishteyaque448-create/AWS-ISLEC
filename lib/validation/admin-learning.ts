@@ -33,6 +33,7 @@ export function validateLearningPathInput(formData: FormData): { data: LearningP
   if (!title || description === null || !level || !LEARNING_LEVELS.includes(level as typeof LEARNING_LEVELS[number]) || estimatedMinutes === undefined || points == null || sortOrder == null) {
     return { error: "Check the required fields and use valid learning path values." };
   }
+  if (estimatedMinutes === 0) return { error: "Estimated minutes must be greater than 0." };
 
   return { data: { title, description, level, estimated_minutes: estimatedMinutes, points, sort_order: sortOrder, is_published: isPublished } };
 }

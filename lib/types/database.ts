@@ -242,6 +242,51 @@ export type Database = {
           },
         ]
       }
+      challenge_completions: {
+        Row: {
+          activity_key: string
+          challenge_id: string
+          completed_at: string
+          created_at: string
+          id: string
+          points_awarded: number
+          profile_id: string
+        }
+        Insert: {
+          activity_key: string
+          challenge_id: string
+          completed_at?: string
+          created_at?: string
+          id?: string
+          points_awarded: number
+          profile_id: string
+        }
+        Update: {
+          activity_key?: string
+          challenge_id?: string
+          completed_at?: string
+          created_at?: string
+          id?: string
+          points_awarded?: number
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_completions_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_completions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendees: {
         Row: {
           event_id: string
@@ -392,6 +437,7 @@ export type Database = {
           points: number
           role: string
           streak: number
+          streak_last_date: string | null
           updated_at: string
         }
         Insert: {
@@ -403,6 +449,7 @@ export type Database = {
           points?: number
           role?: string
           streak?: number
+          streak_last_date?: string | null
           updated_at?: string
         }
         Update: {
@@ -414,6 +461,7 @@ export type Database = {
           points?: number
           role?: string
           streak?: number
+          streak_last_date?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -590,6 +638,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_challenge: {
+        Args: {
+          p_challenge_id: string
+        }
+        Returns: Json
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean

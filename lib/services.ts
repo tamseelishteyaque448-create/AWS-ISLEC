@@ -219,8 +219,9 @@ export const supabaseRepository = {
         .maybeSingle(),
       supabase
         .from("challenges")
-        .select("id, learning_path_id, slug, title, detail, level, points, sort_order")
+        .select("id, learning_path_id, slug, title, detail, level, points, sort_order, learning_paths!inner(is_published)")
         .eq("is_published", true)
+        .eq("learning_paths.is_published", true)
         .order("sort_order", { ascending: true }),
       supabase
         .from("user_challenge_progress")
@@ -301,8 +302,9 @@ export const supabaseRepository = {
     const [challengesResult, progressResult] = await Promise.all([
       supabase
         .from("challenges")
-        .select("id, learning_path_id, slug, title, detail, level, points, sort_order")
+        .select("id, learning_path_id, slug, title, detail, level, points, sort_order, learning_paths!inner(is_published)")
         .eq("is_published", true)
+        .eq("learning_paths.is_published", true)
         .order("sort_order", { ascending: true }),
       supabase
         .from("user_challenge_progress")

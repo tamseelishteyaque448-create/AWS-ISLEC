@@ -1,5 +1,6 @@
 import { PageIntro } from "@/components/cards/PageIntro";
 import { Topline } from "@/components/ui/Topline";
+import { ChallengeCompletionControl } from "@/components/member/ChallengeCompletionControl";
 import { supabaseRepository, type MemberChallenge } from "@/lib/services";
 
 function ChallengeListState({ children }: { children: React.ReactNode }) {
@@ -67,6 +68,7 @@ export default async function Challenges() {
                 <div className="progress-value" style={{ width: `${challenge.progress}%` }} />
               </div>
               <div className="eyebrow" style={{ marginTop: 20 }}>Worth +{challenge.points} pts</div>
+              <ChallengeCompletionControl challengeId={challenge.id} isCompleted={challenge.status === "completed"} />
             </article>
           ))}
         </div>
