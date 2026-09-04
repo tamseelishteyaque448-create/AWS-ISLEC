@@ -79,6 +79,16 @@ export type MemberBadge = {
   earnedAt: string;
 };
 
+export type MemberLeaderboardEntry = {
+  id: string;
+  name: string;
+  handle: string;
+  points: number;
+  streak: number;
+  rank: number;
+  isCurrentMember: boolean;
+};
+
 export type DashboardData = {
   profile: MemberProfile;
   nextChallenge: DashboardChallenge | null;
@@ -331,6 +341,37 @@ export const supabaseRepository = {
         earnedAt: assignment.earned_at,
       };
     });
+  },
+
+  async getLeaderboard(): Promise<MemberLeaderboardEntry[]> {
+    const claims = await getAuthenticatedClaims();
+
+    if (!claims?.sub) {
+      return [];
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, handle, points, streak, created_at")
+      .order("points", { ascending: false })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(100);
+
+    if (error) {
+      throw new Error("Unable to load the leaderboard.");
+    }
+
+    return (data ?? []).map((profile, index) => ({
+      id: profile.id,
+      name: profile.full_name,
+      handle: profile.handle,
+      points: profile.points,
+      streak: profile.streak,
+      rank: index + 1,
+      isCurrentMember: profile.id === claims.sub,
+    }));
   },
 
   async getChallenges(): Promise<MemberChallenge[]> {
