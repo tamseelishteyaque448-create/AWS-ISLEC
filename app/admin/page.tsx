@@ -1,4 +1,3 @@
-import { MemberOverview } from "@/app/member/page";
+import { AdminOverview } from "@/components/admin/AdminOverview";
 
-/** The admin landing page starts in the shared member workspace. */
-export default MemberOverview;
+export default AdminOverview;
