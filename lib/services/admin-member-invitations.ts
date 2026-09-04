@@ -13,7 +13,9 @@ export async function inviteMember({ actorId, email }: { actorId: string; email:
   const client = createAdminClient();
   const emailDomain = email.slice(email.lastIndexOf("@") + 1);
   const auditId = await writeInvitationAuditIntent(client, actorId, emailDomain);
-  const inviteUrl = new URL("/auth/callback?next=/member", getAppUrl()).toString();
+  // Invite links establish their session in the browser URL fragment, so they
+  // must land on the browser onboarding page instead of the server callback.
+  const inviteUrl = new URL("/auth/invite", getAppUrl()).toString();
   const { data, error } = await client.auth.admin.inviteUserByEmail(email, { redirectTo: inviteUrl });
 
   if (error || !data.user?.id) {
