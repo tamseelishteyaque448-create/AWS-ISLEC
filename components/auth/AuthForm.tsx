@@ -1,14 +1,15 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle2, LogIn } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
-async function submitAuth(email: string, password: string) {
+async function submitAuth(email: string, password: string, next: string) {
   const response = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "login", email, password }),
+    body: JSON.stringify({ action: "login", email, password, next }),
   });
   const result = (await response.json().catch(() => ({}))) as { destination?: string; error?: string };
 
@@ -16,13 +17,15 @@ async function submitAuth(email: string, password: string) {
 }
 
 export function AuthForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   // Successful authentication always selects its destination on the server.
-  const next = "/member";
+  const requestedNext = searchParams.get("next");
+  const next = requestedNext === "/member" || requestedNext?.startsWith("/member/") || requestedNext === "/admin" || requestedNext?.startsWith("/admin/") ? requestedNext : "/member";
   const supabaseConfigured = isSupabaseConfigured();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -38,7 +41,7 @@ export function AuthForm() {
     setIsLoading(true);
 
     try {
-      const { destination, error: signInError } = await submitAuth(email, password);
+      const { destination, error: signInError } = await submitAuth(email, password, next);
 
       if (signInError) {
         const invalidCredentials = signInError.toLowerCase().includes("invalid login credentials");

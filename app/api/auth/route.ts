@@ -85,7 +85,10 @@ export async function POST(request: NextRequest) {
       return respond({ error: "The authentication service did not create a session." }, 502);
     }
 
-    return respond({ destination: await getWorkspaceDestination(supabase) });
+    const workspace = await getWorkspaceDestination(supabase);
+    const requestedNext = getText(body.next);
+    const destination = requestedNext === workspace || requestedNext.startsWith(`${workspace}/`) ? requestedNext : workspace;
+    return respond({ destination });
   } catch {
     return respond({ error: "The authentication service is temporarily unavailable." }, 502);
   }

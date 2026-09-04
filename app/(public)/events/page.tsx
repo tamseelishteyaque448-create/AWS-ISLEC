@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Clock3, MapPin, Presentation, UsersRound } from "lucide-react";
 import { mockRepository } from "@/lib/services";
+import { getEventStatus } from "@/data/events";
 
 const communityPromises = [
   "Come with a question, not a polished answer.",
@@ -9,7 +10,7 @@ const communityPromises = [
 ];
 
 export default function EventsPage() {
-  const events = mockRepository.getEvents();
+  const events = mockRepository.getEvents().map((event) => ({ ...event, status: getEventStatus(event) }));
   const upcomingEvents = events.filter((event) => event.status === "Upcoming");
   const pastEvents = events.filter((event) => event.status === "Past");
   const nextEvent = upcomingEvents[0];
