@@ -166,6 +166,8 @@ export type Database = {
           icon: string
           id: string
           points: number
+          requirement_type: string | null
+          requirement_value: number | null
           slug: string
           title: string
           updated_at: string
@@ -176,6 +178,8 @@ export type Database = {
           icon: string
           id?: string
           points?: number
+          requirement_type?: string | null
+          requirement_value?: number | null
           slug: string
           title: string
           updated_at?: string
@@ -186,6 +190,8 @@ export type Database = {
           icon?: string
           id?: string
           points?: number
+          requirement_type?: string | null
+          requirement_value?: number | null
           slug?: string
           title?: string
           updated_at?: string

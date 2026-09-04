@@ -69,6 +69,16 @@ export type MemberChallenge = LearningChallenge & {
   status: "not_started" | "in_progress" | "completed";
 };
 
+export type MemberBadge = {
+  id: string;
+  slug: string;
+  icon: string;
+  title: string;
+  detail: string;
+  points: number;
+  earnedAt: string;
+};
+
 export type DashboardData = {
   profile: MemberProfile;
   nextChallenge: DashboardChallenge | null;
@@ -289,6 +299,38 @@ export const supabaseRepository = {
     }
 
     return (data as ActivityRow[]).map(mapDashboardActivity);
+  },
+
+  async getEarnedBadges(): Promise<MemberBadge[]> {
+    const claims = await getAuthenticatedClaims();
+
+    if (!claims?.sub) {
+      return [];
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("user_badges")
+      .select("earned_at, badges!inner(id, slug, icon, title, detail, points)")
+      .eq("profile_id", claims.sub)
+      .order("earned_at", { ascending: false });
+
+    if (error) {
+      throw new Error("Unable to load earned badges.");
+    }
+
+    return (data ?? []).map((assignment) => {
+      const badge = Array.isArray(assignment.badges) ? assignment.badges[0] : assignment.badges;
+      return {
+        id: badge.id,
+        slug: badge.slug,
+        icon: badge.icon,
+        title: badge.title,
+        detail: badge.detail,
+        points: badge.points,
+        earnedAt: assignment.earned_at,
+      };
+    });
   },
 
   async getChallenges(): Promise<MemberChallenge[]> {
