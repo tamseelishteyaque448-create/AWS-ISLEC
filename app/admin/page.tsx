@@ -1,8 +1,4 @@
-export default function AdminPage() {
-  return (
-    <main>
-      <h1>Admin access is configured.</h1>
-      <p>Admin tools are not available yet.</p>
-    </main>
-  );
-}
+import { MemberOverview } from "@/app/member/page";
+
+/** The admin landing page starts in the shared member workspace. */
+export default MemberOverview;

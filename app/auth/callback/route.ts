@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSafeNext } from "@/lib/auth/redirect";
+import { getWorkspaceDestination } from "@/lib/auth/workspace";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -11,7 +12,11 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+      try {
+        return NextResponse.redirect(new URL(await getWorkspaceDestination(supabase), request.url));
+      } catch {
+        // Fall through to the existing safe callback-error response.
+      }
     }
   }
 

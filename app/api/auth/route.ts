@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import { getWorkspaceDestination } from "@/lib/auth/workspace";
 
 type AuthAction = "login";
 
@@ -75,9 +76,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    return error
-      ? respond({ error: error.message }, error.status ?? 400)
-      : respond({ session: Boolean(data.session) });
+
+    if (error) {
+      return respond({ error: error.message }, error.status ?? 400);
+    }
+
+    if (!data.session) {
+      return respond({ error: "The authentication service did not create a session." }, 502);
+    }
+
+    return respond({ destination: await getWorkspaceDestination(supabase) });
   } catch {
     return respond({ error: "The authentication service is temporarily unavailable." }, 502);
   }

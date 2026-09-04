@@ -1,30 +1,28 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { CheckCircle2, LogIn } from "lucide-react";
-import { getSafeNext } from "@/lib/auth/redirect";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
-async function submitAuth(email: string, next: string, password: string) {
+async function submitAuth(email: string, password: string) {
   const response = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "login", email, password, next }),
+    body: JSON.stringify({ action: "login", email, password }),
   });
-  const result = (await response.json().catch(() => ({}))) as { error?: string };
+  const result = (await response.json().catch(() => ({}))) as { destination?: string; error?: string };
 
-  return { error: result.error };
+  return { destination: result.destination, error: result.error };
 }
 
 export function AuthForm() {
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const next = getSafeNext(searchParams.get("next"));
+  // Successful authentication always selects its destination on the server.
+  const next = "/member";
   const supabaseConfigured = isSupabaseConfigured();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -40,7 +38,7 @@ export function AuthForm() {
     setIsLoading(true);
 
     try {
-      const { error: signInError } = await submitAuth(email, next, password);
+      const { destination, error: signInError } = await submitAuth(email, password);
 
       if (signInError) {
         const invalidCredentials = signInError.toLowerCase().includes("invalid login credentials");
@@ -50,7 +48,11 @@ export function AuthForm() {
       }
 
       setSuccess("Welcome back. Opening your workspace…");
-      window.location.assign(next);
+      if (destination !== "/admin" && destination !== "/member") {
+        throw new Error("The sign-in service returned an invalid workspace.");
+      }
+
+      window.location.assign(destination);
     } catch {
       setError("We could not reach the sign-in service. Check your connection and try again.");
       setIsLoading(false);
