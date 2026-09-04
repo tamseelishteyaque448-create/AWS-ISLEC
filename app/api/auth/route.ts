@@ -1,9 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
-import { getSafeNext } from "@/lib/auth/redirect";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
-type AuthAction = "login" | "signup" | "resend";
+type AuthAction = "login";
 
 type AuthRequest = {
   action?: unknown;
@@ -13,7 +12,7 @@ type AuthRequest = {
 };
 
 function isAuthAction(value: unknown): value is AuthAction {
-  return value === "login" || value === "signup" || value === "resend";
+  return value === "login";
 }
 
 function getText(value: unknown) {
@@ -32,9 +31,7 @@ export async function POST(request: NextRequest) {
   const action = body.action;
   const email = getText(body.email);
   const password = getText(body.password);
-  const next = getSafeNext(getText(body.next));
-
-  if (!isAuthAction(action) || !email || (action !== "resend" && !password)) {
+  if (!isAuthAction(action) || !email || !password) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
   }
 
@@ -77,33 +74,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if (action === "login") {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      return error
-        ? respond({ error: error.message }, error.status ?? 400)
-        : respond({ session: Boolean(data.session) });
-    }
-
-    const callbackUrl = new URL("/auth/callback", request.url);
-    callbackUrl.searchParams.set("next", next);
-
-    if (action === "signup") {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: callbackUrl.toString() },
-      });
-      return error
-        ? respond({ error: error.message }, error.status ?? 400)
-        : respond({ session: Boolean(data.session) });
-    }
-
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email,
-      options: { emailRedirectTo: callbackUrl.toString() },
-    });
-    return error ? respond({ error: error.message }, error.status ?? 400) : respond({ session: false });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    return error
+      ? respond({ error: error.message }, error.status ?? 400)
+      : respond({ session: Boolean(data.session) });
   } catch {
     return respond({ error: "The authentication service is temporarily unavailable." }, 502);
   }
