@@ -4,9 +4,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
 import { eventUpdate, getEventId, makeEventSlug, validateEventInput } from "@/lib/validation/admin-events";
 export type EventFormState = { status: "idle" | "error" | "success"; message?: string };
-export const initialEventFormState: EventFormState = { status: "idle" };
 export type EventAttendanceState = EventFormState;
-export const initialEventAttendanceState: EventAttendanceState = { status: "idle" };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 /** Mutations repeat the page-level server guard; form submissions are separate requests. */
 async function adminClient() { const claims = await requireAdmin(); return { claims, supabase: await createClient() }; }

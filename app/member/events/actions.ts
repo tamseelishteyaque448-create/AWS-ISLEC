@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type EventRegistrationState = { status: "idle" | "success" | "error"; message?: string };
-export const initialEventRegistrationState: EventRegistrationState = { status: "idle" };
 
 async function changeRegistration(formData: FormData, action: "register_for_event" | "cancel_event_registration"): Promise<EventRegistrationState> {
   const claims = await getAuthenticatedClaims();

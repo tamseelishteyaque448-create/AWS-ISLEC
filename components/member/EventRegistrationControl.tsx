@@ -2,7 +2,10 @@
 
 import { useActionState } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
-import { cancelEventRegistration, initialEventRegistrationState, registerForEvent } from "@/app/member/events/actions";
+import { cancelEventRegistration, registerForEvent } from "@/app/member/events/actions";
+import type { EventRegistrationState } from "@/app/member/events/actions";
+
+const initialEventRegistrationState: EventRegistrationState = { status: "idle" };
 
 export function EventRegistrationControl({ eventId, registrationStatus, registrationOpen, cancellationOpen }: { eventId: string; registrationStatus: "registered" | "attended" | "cancelled" | null; registrationOpen: boolean; cancellationOpen: boolean }) {
   const action = registrationStatus === "registered" ? cancelEventRegistration : registerForEvent;

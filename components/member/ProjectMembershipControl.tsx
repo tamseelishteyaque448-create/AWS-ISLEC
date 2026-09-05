@@ -1,7 +1,9 @@
 "use client";
 import { useActionState } from "react";
 import { Check, LoaderCircle, Send } from "lucide-react";
-import { initialProjectMemberState, requestProjectAccess, submitProjectWork } from "@/app/member/projects/actions";
+import { requestProjectAccess, submitProjectWork } from "@/app/member/projects/actions";
+import type { ProjectMemberState } from "@/app/member/projects/actions";
+const initialProjectMemberState: ProjectMemberState = { status: "idle" };
 export function ProjectMembershipControl({ projectId, membershipStatus, canRequest }: { projectId: string; membershipStatus: string | null; canRequest: boolean }) {
   const action = membershipStatus === "active" ? submitProjectWork : requestProjectAccess;
   const [state, formAction, pending] = useActionState(action, initialProjectMemberState);

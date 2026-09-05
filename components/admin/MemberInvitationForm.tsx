@@ -3,9 +3,11 @@
 import { useActionState, useEffect, useRef } from "react";
 import { MailPlus } from "lucide-react";
 import {
-  initialInvitationFormState,
   sendMemberInvitation,
 } from "@/app/admin/members/actions";
+import type { InvitationFormState } from "@/app/admin/members/actions";
+
+const initialInvitationFormState: InvitationFormState = { status: "idle" };
 
 export function MemberInvitationForm() {
   const [state, action, pending] = useActionState(sendMemberInvitation, initialInvitationFormState);

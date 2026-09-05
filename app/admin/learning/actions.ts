@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getLearningPathId, learningPathUpdate, makeLearningPathSlug, validateLearningPathInput } from "@/lib/validation/admin-learning";
 
 export type LearningPathFormState = { status: "idle" | "error" | "success"; message?: string };
-export const initialLearningPathFormState: LearningPathFormState = { status: "idle" };
 
 async function adminClient() {
   const claims = await requireAdmin();

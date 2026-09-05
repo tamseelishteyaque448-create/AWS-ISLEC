@@ -2,7 +2,10 @@
 
 import { useActionState } from "react";
 import { Check, LoaderCircle } from "lucide-react";
-import { initialEventAttendanceState, recordEventAttendance } from "@/app/admin/events/actions";
+import { recordEventAttendance } from "@/app/admin/events/actions";
+import type { EventAttendanceState } from "@/app/admin/events/actions";
+
+const initialEventAttendanceState: EventAttendanceState = { status: "idle" };
 
 export function EventAttendanceControl({ eventId, profileId, status }: { eventId: string; profileId: string; status: string }) {
   const [state, formAction, pending] = useActionState(recordEventAttendance, initialEventAttendanceState);

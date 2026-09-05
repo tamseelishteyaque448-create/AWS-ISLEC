@@ -2,7 +2,10 @@
 
 import { useActionState } from "react";
 import { Check, LoaderCircle } from "lucide-react";
-import { completeChallenge, initialChallengeCompletionState } from "@/app/member/challenges/actions";
+import { completeChallenge } from "@/app/member/challenges/actions";
+import type { ChallengeCompletionState } from "@/app/member/challenges/actions";
+
+const initialChallengeCompletionState: ChallengeCompletionState = { status: "idle" };
 
 export function ChallengeCompletionControl({ challengeId, isCompleted }: { challengeId: string; isCompleted: boolean }) {
   const [state, action, pending] = useActionState(completeChallenge, initialChallengeCompletionState);

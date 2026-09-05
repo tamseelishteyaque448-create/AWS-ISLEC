@@ -2,9 +2,12 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { CalendarPlus, MapPin, Pencil, UsersRound } from "lucide-react";
-import { createEvent, initialEventFormState, updateEvent } from "@/app/admin/events/actions";
+import { createEvent, updateEvent } from "@/app/admin/events/actions";
+import type { EventFormState } from "@/app/admin/events/actions";
 import { EventAttendanceControl } from "@/components/admin/EventAttendanceControl";
 import type { AdminEvent } from "@/lib/services/admin-events";
+
+const initialEventFormState: EventFormState = { status: "idle" };
 
 function toDateTimeLocal(value: string | null) { return value ? new Date(value).toISOString().slice(0, 16) : ""; }
 function formatDate(value: string | null) { return value ? `${new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value))} UTC` : "Not set"; }

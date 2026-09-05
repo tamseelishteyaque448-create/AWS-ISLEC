@@ -2,8 +2,11 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { BookOpen, Pencil, Plus, Target } from "lucide-react";
-import { createLearningPath, initialLearningPathFormState, updateLearningPath } from "@/app/admin/learning/actions";
+import { createLearningPath, updateLearningPath } from "@/app/admin/learning/actions";
+import type { LearningPathFormState } from "@/app/admin/learning/actions";
 import type { AdminLearningPath } from "@/lib/services/admin-learning";
+
+const initialLearningPathFormState: LearningPathFormState = { status: "idle" };
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));

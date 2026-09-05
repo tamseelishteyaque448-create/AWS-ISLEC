@@ -34,8 +34,6 @@ export type ChallengeCompletionState = {
   result?: CompletionResult;
 };
 
-export const initialChallengeCompletionState: ChallengeCompletionState = { status: "idle" };
-
 function parseCompletionResult(value: Json | null): CompletionResult | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const result = value as Record<string, Json | undefined>;

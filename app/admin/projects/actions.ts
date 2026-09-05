@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getProjectId, makeProjectSlug, projectUpdate, validateProjectInput } from "@/lib/validation/admin-projects";
 
 export type ProjectFormState = { status: "idle" | "error" | "success"; message?: string };
-export const initialProjectFormState: ProjectFormState = { status: "idle" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 async function adminClient() { const claims = await requireAdmin(); return { claims, supabase: await createClient() }; }
 function revalidateProjects() { revalidatePath("/admin/projects"); revalidatePath("/member/projects"); revalidatePath("/projects"); revalidatePath("/explore"); }

@@ -10,8 +10,6 @@ export type InvitationFormState = {
   message?: string;
 };
 
-export const initialInvitationFormState: InvitationFormState = { status: "idle" };
-
 /** Sends a member invitation after re-checking the caller's server-side allowlist entry. */
 export async function sendMemberInvitation(
   _previousState: InvitationFormState,

@@ -2,8 +2,11 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { Pencil, Plus, Target } from "lucide-react";
-import { createChallenge, initialChallengeFormState, updateChallenge } from "@/app/admin/challenges/actions";
+import { createChallenge, updateChallenge } from "@/app/admin/challenges/actions";
+import type { ChallengeFormState } from "@/app/admin/challenges/actions";
 import type { AdminChallenge, AdminChallengeData } from "@/lib/services/admin-challenges";
+
+const initialChallengeFormState: ChallengeFormState = { status: "idle" };
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));

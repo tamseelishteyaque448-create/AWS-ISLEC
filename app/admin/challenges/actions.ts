@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { challengeUpdate, getChallengeId, makeChallengeSlug, validateChallengeInput } from "@/lib/validation/admin-challenges";
 
 export type ChallengeFormState = { status: "idle" | "error" | "success"; message?: string };
-export const initialChallengeFormState: ChallengeFormState = { status: "idle" };
 
 async function adminClient() {
   await requireAdmin();
