@@ -378,6 +378,7 @@ export type Database = {
           ends_at: string | null
           event_type: string
           id: string
+          is_published: boolean
           location: string | null
           slug: string
           starts_at: string
@@ -394,6 +395,7 @@ export type Database = {
           ends_at?: string | null
           event_type: string
           id?: string
+          is_published?: boolean
           location?: string | null
           slug: string
           starts_at: string
@@ -410,6 +412,7 @@ export type Database = {
           ends_at?: string | null
           event_type?: string
           id?: string
+          is_published?: boolean
           location?: string | null
           slug?: string
           starts_at?: string
@@ -699,6 +702,18 @@ export type Database = {
           completion_count: number
           member_count: number
         }[]
+      }
+      cancel_event_registration: {
+        Args: { p_event_id: string }
+        Returns: Json
+      }
+      record_event_attendance: {
+        Args: { p_event_id: string; p_profile_id: string }
+        Returns: Json
+      }
+      register_for_event: {
+        Args: { p_event_id: string }
+        Returns: Json
       }
     }
     Enums: {
