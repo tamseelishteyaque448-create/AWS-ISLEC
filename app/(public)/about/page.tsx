@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen, Handshake, HeartHandshake, Lightbulb, Rocket, UsersRound } from "lucide-react";
-import { mockRepository } from "@/lib/services";
+import { getPublicCommunitySnapshot } from "@/lib/services/community";
 
 const philosophy = [
   { icon: Lightbulb, step: "01 / Learn", title: "Find your starting point.", detail: "Explore AWS, AI, and emerging technology with room to ask better questions." },
@@ -16,16 +16,17 @@ const values = [
   ["Generosity compounds", "A thoughtful note, a kind critique, or an introduction can change someone’s path."],
 ] as const;
 
-export default function AboutPage() {
-  const projects = mockRepository.getProjects();
-  const events = mockRepository.getEvents();
-  const challenges = mockRepository.getChallenges();
-  const activities = mockRepository.getActivities();
+export default async function AboutPage() {
+  const snapshot = await getPublicCommunitySnapshot().catch(() => null);
+  const projects = snapshot?.projects ?? [];
+  const events = snapshot?.events.filter((event) => event.status === "upcoming") ?? [];
+  const paths = snapshot?.learningPaths ?? [];
+  const shippedProjects = projects.filter((project) => project.status === "shipped");
 
   return <>
     <section className="about-hero">
       <div><div className="eyebrow">About AWS ISLEC</div><h1>A place for<br />builders in <span>motion.</span></h1><p>AWS ISLEC is a student technology community for people who want to understand the cloud by using it, grow their confidence by making things, and find others who make the journey more interesting.</p><div className="hero-actions"><Link className="button" href="/explore">Explore the community <ArrowRight size={16} aria-hidden="true" /></Link><Link className="button button-secondary" href="/join">Join AWS ISLEC</Link></div></div>
-      <aside className="about-proof" aria-label="AWS ISLEC community activity"><div className="eyebrow">The community in practice</div><div className="about-proof-grid"><div><strong>{challenges.length}</strong><span>practical learning paths</span></div><div><strong>{projects.length}</strong><span>projects in the studio</span></div><div><strong>{events.filter((event) => event.status === "Upcoming").length}</strong><span>ways to gather next</span></div><div><strong>{activities.length}</strong><span>recent moments of momentum</span></div></div><p>The goal is not to look like you belong in technology. It is to make, learn, and contribute until you know you do.</p></aside>
+      <aside className="about-proof" aria-label="AWS ISLEC community activity"><div className="eyebrow">The community in practice</div><div className="about-proof-grid"><div><strong>{paths.length}</strong><span>published learning paths</span></div><div><strong>{projects.length}</strong><span>projects in the studio</span></div><div><strong>{events.length}</strong><span>ways to gather next</span></div><div><strong>{shippedProjects.length}</strong><span>shipped project examples</span></div></div><p>The goal is not to look like you belong in technology. It is to make, learn, and contribute until you know you do.</p></aside>
     </section>
 
     <section className="about-intro" aria-labelledby="intro-title"><div className="eyebrow">Why we exist</div><h2 id="intro-title">Technology is easier to enter when nobody has to enter it alone.</h2><div><p>There is no single path into a technical life. Some people arrive with a course, others with a problem they want to solve, and many with only a hunch that they could build something useful.</p><p>AWS ISLEC makes space for all of those beginnings. We learn with our hands, share what is working, and make each other’s next step easier to see.</p></div></section>

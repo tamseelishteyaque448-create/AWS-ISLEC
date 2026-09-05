@@ -194,6 +194,28 @@ export const mockRepository: IslecRepository = {
  * Request-scoped, RLS-enforced data access for authenticated member pages.
  */
 export const supabaseRepository = {
+  async getPublicLearningCatalogue() {
+    const supabase = await createClient();
+    const [pathsResult, challengesResult] = await Promise.all([
+      supabase
+        .from("learning_paths")
+        .select("id, slug, title, description, level, estimated_minutes, points, sort_order")
+        .eq("is_published", true)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("challenges")
+        .select("id, learning_path_id, slug, title, detail, level, points, sort_order")
+        .eq("is_published", true)
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    if (pathsResult.error || challengesResult.error) {
+      throw new LearningCatalogueError();
+    }
+
+    return pathsResult.data.map((path) => mapLearningPath(path, challengesResult.data));
+  },
+
   async getProfile(): Promise<MemberProfile | null> {
     const claims = await getAuthenticatedClaims();
 
@@ -411,26 +433,6 @@ export const supabaseRepository = {
   },
 
   async getLearningCatalogue() {
-    const supabase = await createClient();
-    const [pathsResult, challengesResult] = await Promise.all([
-      supabase
-        .from("learning_paths")
-        .select("id, slug, title, description, level, estimated_minutes, points, sort_order")
-        .eq("is_published", true)
-        .order("sort_order", { ascending: true }),
-      supabase
-        .from("challenges")
-        .select("id, learning_path_id, slug, title, detail, level, points, sort_order")
-        .eq("is_published", true)
-        .order("sort_order", { ascending: true }),
-    ]);
-
-    if (pathsResult.error || challengesResult.error) {
-      throw new LearningCatalogueError();
-    }
-
-    return pathsResult.data.map((path) =>
-      mapLearningPath(path, challengesResult.data),
-    );
+    return this.getPublicLearningCatalogue();
   },
 };
