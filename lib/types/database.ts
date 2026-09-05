@@ -516,19 +516,28 @@ export type Database = {
           joined_at: string
           profile_id: string
           project_id: string
+          reviewed_at: string | null
           role: string
+          status: string
+          submitted_at: string | null
         }
         Insert: {
           joined_at?: string
           profile_id: string
           project_id: string
+          reviewed_at?: string | null
           role?: string
+          status?: string
+          submitted_at?: string | null
         }
         Update: {
           joined_at?: string
           profile_id?: string
           project_id?: string
+          reviewed_at?: string | null
           role?: string
+          status?: string
+          submitted_at?: string | null
         }
         Relationships: [
           {
@@ -554,6 +563,7 @@ export type Database = {
           created_by: string | null
           description: string
           id: string
+          is_published: boolean
           progress: number
           slug: string
           status: string
@@ -567,6 +577,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
+          is_published?: boolean
           progress?: number
           slug: string
           status?: string
@@ -580,6 +591,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
+          is_published?: boolean
           progress?: number
           slug?: string
           status?: string
@@ -709,6 +721,18 @@ export type Database = {
       }
       record_event_attendance: {
         Args: { p_event_id: string; p_profile_id: string }
+        Returns: Json
+      }
+      request_project_access: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      review_project_member: {
+        Args: { p_action: string; p_profile_id: string; p_project_id: string }
+        Returns: Json
+      }
+      submit_project_work: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       register_for_event: {

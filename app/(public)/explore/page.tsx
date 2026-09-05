@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen, CalendarDays, Code2, MessageCircleHeart, Rocket, Sparkles, UsersRound } from "lucide-react";
 import { mockRepository } from "@/lib/services";
+import { getPublicProjects } from "@/lib/services/projects";
 
 const contributionWays = [
   { icon: BookOpen, title: "Share a useful note", detail: "Turn a fresh lesson into a trail someone else can follow." },
@@ -8,9 +9,9 @@ const contributionWays = [
   { icon: UsersRound, title: "Bring a collaborator", detail: "Invite someone curious and make the next build a little less lonely." },
 ];
 
-export default function ExplorePage() {
+export default async function ExplorePage() {
   const challenges = mockRepository.getChallenges();
-  const projects = mockRepository.getProjects();
+  const projects = await getPublicProjects().catch(() => []);
   const events = mockRepository.getEvents();
   const activities = mockRepository.getActivities();
 

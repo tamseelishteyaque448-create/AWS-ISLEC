@@ -1,0 +1,14 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
+import { getProjectId, makeProjectSlug, projectUpdate, validateProjectInput } from "@/lib/validation/admin-projects";
+
+export type ProjectFormState = { status: "idle" | "error" | "success"; message?: string };
+export const initialProjectFormState: ProjectFormState = { status: "idle" };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+async function adminClient() { const claims = await requireAdmin(); return { claims, supabase: await createClient() }; }
+function revalidateProjects() { revalidatePath("/admin/projects"); revalidatePath("/member/projects"); revalidatePath("/projects"); revalidatePath("/explore"); }
+export async function createProject(_: ProjectFormState, formData: FormData): Promise<ProjectFormState> { const admin = await adminClient(); const input = validateProjectInput(formData); if ("error" in input) return { status: "error", message: input.error }; const { error } = await admin.supabase.from("projects").insert({ ...input.data, slug: makeProjectSlug(input.data.title), created_by: admin.claims.sub }); if (error) return { status: "error", message: "The project could not be created." }; revalidateProjects(); return { status: "success", message: "Project created." }; }
+export async function updateProject(_: ProjectFormState, formData: FormData): Promise<ProjectFormState> { const admin = await adminClient(); const id = getProjectId(formData.get("project_id")); const input = validateProjectInput(formData); if (!id || "error" in input) return { status: "error", message: "error" in input ? input.error : "Invalid project." }; const { error } = await admin.supabase.from("projects").update(projectUpdate(input.data)).eq("id", id); if (error) return { status: "error", message: "The project could not be updated." }; revalidateProjects(); return { status: "success", message: "Project updated." }; }
+export async function reviewProjectMember(_: ProjectFormState, formData: FormData): Promise<ProjectFormState> { const admin = await adminClient(); const projectId = formData.get("project_id"); const profileId = formData.get("profile_id"); const action = formData.get("action"); if (typeof projectId !== "string" || typeof profileId !== "string" || !UUID.test(projectId) || !UUID.test(profileId) || typeof action !== "string") return { status: "error", message: "Invalid team review." }; const { error } = await admin.supabase.rpc("review_project_member", { p_project_id: projectId, p_profile_id: profileId, p_action: action }); if (error) return { status: "error", message: "The team review could not be applied." }; revalidateProjects(); return { status: "success", message: "Team status updated." }; }
