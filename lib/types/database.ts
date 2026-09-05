@@ -293,6 +293,42 @@ export type Database = {
           },
         ]
       }
+      challenge_completion_badges: {
+        Row: {
+          badge_id: string
+          completion_id: string
+          created_at: string
+          points_awarded: number
+        }
+        Insert: {
+          badge_id: string
+          completion_id: string
+          created_at?: string
+          points_awarded: number
+        }
+        Update: {
+          badge_id?: string
+          completion_id?: string
+          created_at?: string
+          points_awarded?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_completion_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_completion_badges_completion_id_fkey"
+            columns: ["completion_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_completions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendees: {
         Row: {
           event_id: string
@@ -653,6 +689,16 @@ export type Database = {
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      get_admin_learning_outcome_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          badge_award_count: number
+          badge_points_recorded: number
+          challenge_points_awarded: number
+          completion_count: number
+          member_count: number
+        }[]
       }
     }
     Enums: {

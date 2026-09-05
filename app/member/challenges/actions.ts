@@ -13,7 +13,20 @@ type CompletionResult = {
   pointsAwarded: number;
   totalPoints: number;
   streak: number;
+  newBadges: Array<{ title: string; points: number }>;
 };
+
+function parseNewBadges(value: Json | undefined): Array<{ title: string; points: number }> | null {
+  if (!Array.isArray(value)) return null;
+  const badges: Array<{ title: string; points: number }> = [];
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+    const badge = candidate as Record<string, Json | undefined>;
+    if (typeof badge.title !== "string" || typeof badge.points !== "number") return null;
+    badges.push({ title: badge.title, points: badge.points });
+  }
+  return badges;
+}
 
 export type ChallengeCompletionState = {
   status: "idle" | "error" | "completed" | "already_completed";
@@ -31,8 +44,10 @@ function parseCompletionResult(value: Json | null): CompletionResult | null {
   const pointsAwarded = result.points_awarded;
   const totalPoints = result.total_points;
   const streak = result.streak;
+  const newBadges = parseNewBadges(result.new_badges);
   if ((status !== "completed" && status !== "already_completed") || typeof challengeId !== "string" || typeof pointsAwarded !== "number" || typeof totalPoints !== "number" || typeof streak !== "number") return null;
-  return { status, challengeId, pointsAwarded, totalPoints, streak };
+  if (!newBadges) return null;
+  return { status, challengeId, pointsAwarded, totalPoints, streak, newBadges };
 }
 
 export async function completeChallenge(_previousState: ChallengeCompletionState, formData: FormData): Promise<ChallengeCompletionState> {
@@ -56,6 +71,7 @@ export async function completeChallenge(_previousState: ChallengeCompletionState
   revalidatePath("/member/activities");
   revalidatePath("/member/achievements");
   revalidatePath("/member/leaderboard");
+  revalidatePath("/admin/challenges");
 
   return { status: result.status, result, message: result.status === "completed" ? "Challenge completed." : "This challenge was already completed." };
 }
