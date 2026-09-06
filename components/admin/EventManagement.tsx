@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { CalendarPlus, MapPin, Pencil, UsersRound } from "lucide-react";
 import { createEvent, updateEvent } from "@/app/admin/events/actions";
 import type { EventFormState } from "@/app/admin/events/actions";
@@ -23,6 +24,10 @@ function EventFields({ event }: { event?: AdminEvent }) {
     <label>Capacity<input name="capacity" type="number" min="1" max="100000" defaultValue={event?.capacity ?? ""} /></label>
     <label className="admin-event-publish"><input name="is_published" type="checkbox" defaultChecked={event?.is_published ?? false} style={{ width: "auto", minHeight: "auto" }} />Publish on the public calendar</label>
     <label className="admin-event-field-wide">Description<textarea name="context" maxLength={2000} defaultValue={event?.context ?? ""} /></label>
+    <label className="admin-event-field-wide">Event details<textarea name="details" maxLength={20000} defaultValue={event?.details ?? ""} placeholder="What attendees can expect, what to bring, and any joining instructions." /></label>
+    <label>Poster image<input name="poster" type="file" accept="image/jpeg,image/png,image/webp,image/avif" /></label>
+    <label>Poster description<input name="poster_alt" maxLength={200} defaultValue={event?.poster_alt ?? ""} placeholder="Describe the poster for screen readers" /></label>
+    {event?.posterUrl ? <label className="admin-event-poster-current"><Image src={event.posterUrl} alt="Current event poster" width={54} height={54} unoptimized /><span><input name="remove_poster" type="checkbox" style={{ width: "auto", minHeight: "auto" }} />Remove current poster</span></label> : null}
   </div>;
 }
 
@@ -30,12 +35,12 @@ function CreateEventForm() {
   const [state, action, pending] = useActionState(createEvent, initialEventFormState);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state.status === "success") formRef.current?.reset(); }, [state.status]);
-  return <details className="admin-event-create"><summary><CalendarPlus size={17} aria-hidden="true" />Create event</summary><form action={action} ref={formRef}><EventFields /><div className="admin-event-actions"><button className="button" type="submit" disabled={pending}>{pending ? "Creating…" : "Create event"}</button><p className={`admin-event-message ${state.status}`} aria-live="polite">{state.message}</p></div></form></details>;
+  return <details className="admin-event-create"><summary><CalendarPlus size={17} aria-hidden="true" />Create event</summary><form action={action} ref={formRef} encType="multipart/form-data"><EventFields /><div className="admin-event-actions"><button className="button" type="submit" disabled={pending}>{pending ? "Creating…" : "Create event"}</button><p className={`admin-event-message ${state.status}`} aria-live="polite">{state.message}</p></div></form></details>;
 }
 
 function EditEventForm({ event }: { event: AdminEvent }) {
   const [state, action, pending] = useActionState(updateEvent, initialEventFormState);
-  return <details className="admin-event-edit"><summary><Pencil size={15} aria-hidden="true" />Edit</summary><form action={action}><input type="hidden" name="event_id" value={event.id} /><EventFields event={event} /><div className="admin-event-actions"><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</button><p className={`admin-event-message ${state.status}`} aria-live="polite">{state.message}</p></div></form></details>;
+  return <details className="admin-event-edit"><summary><Pencil size={15} aria-hidden="true" />Edit</summary><form action={action} encType="multipart/form-data"><input type="hidden" name="event_id" value={event.id} /><EventFields event={event} /><div className="admin-event-actions"><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</button><p className={`admin-event-message ${state.status}`} aria-live="polite">{state.message}</p></div></form></details>;
 }
 
 function AttendeeList({ event }: { event: AdminEvent }) {

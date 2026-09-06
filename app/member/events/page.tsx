@@ -1,4 +1,5 @@
-import { CalendarDays, Clock3, MapPin, UsersRound } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CalendarDays, Clock3, MapPin, UsersRound } from "lucide-react";
 import { PageIntro } from "@/components/cards/PageIntro";
 import { EventRegistrationControl } from "@/components/member/EventRegistrationControl";
 import { Topline } from "@/components/ui/Topline";
@@ -17,12 +18,12 @@ export default async function Events() {
     {events === null ? <section className="admin-member-error"><h2>The event calendar is unavailable.</h2><p>Please refresh the page and try again.</p></section> : events.length === 0 ? <section className="admin-member-empty"><CalendarDays size={24} aria-hidden="true" /><h2>No events on the calendar yet.</h2><p>Check back soon for the next opportunity to gather.</p></section> : <div className="list">{events.map((event) => {
       return <article className="list-item" key={event.id}>
         <div className="member-event-copy">
-          <span className="eyebrow">{event.event_type} · {event.status}</span>
-          <strong>{event.title}</strong>
+          <span className="eyebrow">{event.event_type} · {event.effectiveStatus}</span>
+          <strong><Link href={`/member/events/${event.slug}`}>{event.title}</Link></strong>
           {event.context ? <p className="muted">{event.context}</p> : null}
           <div className="member-event-meta"><span><Clock3 size={14} aria-hidden="true" />{formatDate(event.starts_at)} UTC</span><span><MapPin size={14} aria-hidden="true" />{event.location || "Location to be confirmed"}</span>{event.capacity ? <span><UsersRound size={14} aria-hidden="true" />Capacity {event.capacity}</span> : null}</div>
         </div>
-        <EventRegistrationControl eventId={event.id} registrationStatus={event.registrationStatus} registrationOpen={event.registrationOpen} cancellationOpen={event.cancellationOpen} />
+        <div className="member-event-actions"><Link href={`/member/events/${event.slug}`}>Details <ArrowRight size={14} aria-hidden="true" /></Link><EventRegistrationControl eventId={event.id} registrationStatus={event.registrationStatus} registrationOpen={event.registrationOpen} cancellationOpen={event.cancellationOpen} /></div>
       </article>;
     })}</div>}
   </>;

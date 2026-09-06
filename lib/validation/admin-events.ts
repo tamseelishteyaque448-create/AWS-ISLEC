@@ -2,7 +2,7 @@ import type { TablesInsert, TablesUpdate } from "@/lib/types/database";
 
 const EVENT_STATUSES = ["upcoming", "past", "cancelled"] as const;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export type EventInput = Pick<TablesInsert<"events">, "title" | "event_type" | "status" | "starts_at" | "ends_at" | "location" | "capacity" | "context" | "is_published">;
+export type EventInput = Pick<TablesInsert<"events">, "title" | "event_type" | "status" | "starts_at" | "ends_at" | "location" | "capacity" | "context" | "details" | "poster_alt" | "is_published">;
 
 function text(value: FormDataEntryValue | null, maxLength: number, required = false) {
   if (typeof value !== "string") return required ? null : "";
@@ -30,10 +30,12 @@ export function validateEventInput(formData: FormData): { data: EventInput } | {
   const endsAt = endsAtValue === "" ? null : utcDate(endsAtValue);
   const locationValue = text(formData.get("location"), 200);
   const context = text(formData.get("context"), 2_000);
+  const details = text(formData.get("details"), 20_000);
+  const posterAltValue = text(formData.get("poster_alt"), 200);
   const parsedCapacity = capacity(formData.get("capacity"));
-  if (!title || !eventType || !statusValue || !EVENT_STATUSES.includes(statusValue as typeof EVENT_STATUSES[number]) || !startsAt || endsAt === undefined || locationValue === null || context === null || parsedCapacity === undefined) return { error: "Check the required fields and use valid dates, status, and capacity." };
+  if (!title || !eventType || !statusValue || !EVENT_STATUSES.includes(statusValue as typeof EVENT_STATUSES[number]) || !startsAt || endsAt === undefined || locationValue === null || context === null || details === null || posterAltValue === null || parsedCapacity === undefined) return { error: "Check the required fields and use valid dates, status, and capacity." };
   if (endsAt && new Date(endsAt) <= new Date(startsAt)) return { error: "The end date must be after the start date." };
-  return { data: { title, event_type: eventType, status: statusValue, starts_at: startsAt, ends_at: endsAt, location: locationValue || null, context, capacity: parsedCapacity, is_published: formData.get("is_published") === "on" } };
+  return { data: { title, event_type: eventType, status: statusValue, starts_at: startsAt, ends_at: endsAt, location: locationValue || null, context, details, capacity: parsedCapacity, poster_alt: posterAltValue || null, is_published: formData.get("is_published") === "on" } };
 }
 export function eventUpdate(input: EventInput): TablesUpdate<"events"> { return input; }
 export function makeEventSlug(title: string) {

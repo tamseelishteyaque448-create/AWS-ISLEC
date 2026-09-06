@@ -3,33 +3,56 @@ import { getAuthenticatedClaims } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 type EventRow = {
-  id: string;
-  title: string;
-  event_type: string;
-  status: string;
-  starts_at: string;
-  ends_at: string | null;
-  location: string | null;
-  context: string;
-  capacity: number | null;
-  is_published: boolean;
+  id: string; slug: string; title: string; event_type: string; status: "upcoming" | "past" | "cancelled";
+  starts_at: string; ends_at: string | null; location: string | null; context: string; details: string;
+  capacity: number | null; is_published: boolean; poster_path: string | null; poster_alt: string | null;
+};
+type Availability = { registeredCount: number; availableSlots: number | null };
+export type EventDisplayStatus = "upcoming" | "past" | "cancelled";
+export type EventWithPresentation = EventRow & Availability & { posterUrl: string | null; effectiveStatus: EventDisplayStatus };
+export type CommunityEvent = EventWithPresentation & {
+  registrationStatus: "registered" | "attended" | "cancelled" | null; registrationOpen: boolean; cancellationOpen: boolean;
 };
 
-export type CommunityEvent = EventRow & {
-  registrationStatus: "registered" | "attended" | "cancelled" | null;
-  registrationOpen: boolean;
-  cancellationOpen: boolean;
-};
+const EVENT_FIELDS = "id, slug, title, event_type, status, starts_at, ends_at, location, context, details, capacity, is_published, poster_path, poster_alt";
+const POSTER_BUCKET = "event-posters";
 
-const EVENT_FIELDS = "id, title, event_type, status, starts_at, ends_at, location, context, capacity, is_published";
+function getEffectiveStatus(event: Pick<EventRow, "status" | "starts_at">, now = Date.now()): EventDisplayStatus {
+  if (event.status === "cancelled") return "cancelled";
+  return new Date(event.starts_at).getTime() <= now ? "past" : "upcoming";
+}
 
-export async function getPublicEvents(): Promise<EventRow[]> {
+async function getAvailability(eventId: string): Promise<Availability> {
   const supabase = await createClient();
-  // This page can be requested by a signed-in member, so preserve the public
-  // catalogue boundary explicitly instead of relying only on the caller's RLS role.
+  const { data, error } = await supabase.rpc("get_event_availability", { p_event_id: eventId });
+  if (error || !data?.[0]) throw new Error("Unable to load event availability.");
+  return { registeredCount: data[0].registered_count, availableSlots: data[0].available_slots };
+}
+
+async function getPosterUrl(path: string | null): Promise<string | null> {
+  if (!path) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage.from(POSTER_BUCKET).createSignedUrl(path, 60 * 30);
+  return error ? null : data.signedUrl;
+}
+
+async function presentEvent(event: EventRow): Promise<EventWithPresentation> {
+  const [availability, posterUrl] = await Promise.all([getAvailability(event.id), getPosterUrl(event.poster_path)]);
+  return { ...event, ...availability, posterUrl, effectiveStatus: getEffectiveStatus(event) };
+}
+
+export async function getPublicEvents(): Promise<EventWithPresentation[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase.from("events").select(EVENT_FIELDS).eq("is_published", true).neq("status", "cancelled").order("starts_at", { ascending: true });
   if (error) throw new Error("Unable to load events.");
-  return (data ?? []) as EventRow[];
+  return Promise.all(((data ?? []) as EventRow[]).map(presentEvent));
+}
+
+export async function getPublicEventBySlug(slug: string): Promise<EventWithPresentation | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("events").select(EVENT_FIELDS).eq("slug", slug).eq("is_published", true).neq("status", "cancelled").maybeSingle();
+  if (error) throw new Error("Unable to load event.");
+  return data ? presentEvent(data as EventRow) : null;
 }
 
 export async function getMemberEvents(): Promise<CommunityEvent[]> {
@@ -42,11 +65,11 @@ export async function getMemberEvents(): Promise<CommunityEvent[]> {
   ]);
   if (eventsResult.error || attendanceResult.error) throw new Error("Unable to load member events.");
   const attendance = new Map((attendanceResult.data ?? []).map((row) => [row.event_id, row.status]));
-  const now = new Date().toISOString();
-  return ((eventsResult.data ?? []) as EventRow[]).map((event) => ({
-    ...event,
-    registrationStatus: (attendance.get(event.id) ?? null) as CommunityEvent["registrationStatus"],
-    registrationOpen: event.is_published && event.status === "upcoming" && event.starts_at > now,
-    cancellationOpen: event.status === "upcoming" && event.starts_at > now,
-  }));
+  const events = await Promise.all(((eventsResult.data ?? []) as EventRow[]).map(presentEvent));
+  return events.map((event) => ({ ...event, registrationStatus: (attendance.get(event.id) ?? null) as CommunityEvent["registrationStatus"], registrationOpen: event.is_published && event.effectiveStatus === "upcoming" && event.availableSlots !== 0, cancellationOpen: event.effectiveStatus === "upcoming" }));
+}
+
+export async function getMemberEventBySlug(slug: string): Promise<CommunityEvent | null> {
+  const events = await getMemberEvents();
+  return events.find((event) => event.slug === slug) ?? null;
 }

@@ -375,11 +375,14 @@ export type Database = {
           context: string
           created_at: string
           created_by: string | null
+          details: string
           ends_at: string | null
           event_type: string
           id: string
           is_published: boolean
           location: string | null
+          poster_alt: string | null
+          poster_path: string | null
           slug: string
           starts_at: string
           status: string
@@ -392,11 +395,14 @@ export type Database = {
           context?: string
           created_at?: string
           created_by?: string | null
+          details?: string
           ends_at?: string | null
           event_type: string
           id?: string
           is_published?: boolean
           location?: string | null
+          poster_alt?: string | null
+          poster_path?: string | null
           slug: string
           starts_at: string
           status?: string
@@ -409,11 +415,14 @@ export type Database = {
           context?: string
           created_at?: string
           created_by?: string | null
+          details?: string
           ends_at?: string | null
           event_type?: string
           id?: string
           is_published?: boolean
           location?: string | null
+          poster_alt?: string | null
+          poster_path?: string | null
           slug?: string
           starts_at?: string
           status?: string
@@ -713,6 +722,13 @@ export type Database = {
           challenge_points_awarded: number
           completion_count: number
           member_count: number
+        }[]
+      }
+      get_event_availability: {
+        Args: { p_event_id: string }
+        Returns: {
+          available_slots: number | null
+          registered_count: number
         }[]
       }
       cancel_event_registration: {

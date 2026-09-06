@@ -16,6 +16,7 @@ async function changeRegistration(formData: FormData, action: "register_for_even
   const { error } = await supabase.rpc(action, { p_event_id: eventId.toLowerCase() });
   if (error) return { status: "error", message: action === "register_for_event" ? "Registration is unavailable. The event may be full or closed." : "This registration can no longer be cancelled." };
   revalidatePath("/member/events");
+  revalidatePath("/member/events/[slug]", "page");
   revalidatePath("/admin/events");
   return { status: "success", message: action === "register_for_event" ? "You are registered." : "Your registration has been cancelled." };
 }

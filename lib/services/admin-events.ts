@@ -4,14 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/types/database";
 
 export type AdminEventAttendee = Pick<Tables<"event_attendees">, "profile_id" | "status"> & { fullName: string; handle: string };
-export type AdminEvent = Pick<Tables<"events">, "id" | "title" | "event_type" | "status" | "starts_at" | "ends_at" | "location" | "capacity" | "context" | "is_published"> & { registrationCount: number; attendees: AdminEventAttendee[] };
+export type AdminEvent = Pick<Tables<"events">, "id" | "title" | "event_type" | "status" | "starts_at" | "ends_at" | "location" | "capacity" | "context" | "details" | "is_published" | "poster_path" | "poster_alt"> & { registrationCount: number; attendees: AdminEventAttendee[]; posterUrl: string | null; effectiveStatus: "upcoming" | "past" | "cancelled" };
 
 /** Loads event records and RLS-authorized registration rows for the admin workspace. */
 export async function getAdminEvents(): Promise<AdminEvent[]> {
   await requireAdmin();
   const supabase = await createClient();
   const [eventsResult, attendeesResult, profilesResult] = await Promise.all([
-    supabase.from("events").select("id, title, event_type, status, starts_at, ends_at, location, capacity, context, is_published").order("starts_at", { ascending: true }),
+    supabase.from("events").select("id, title, event_type, status, starts_at, ends_at, location, capacity, context, details, is_published, poster_path, poster_alt").order("starts_at", { ascending: true }),
     supabase.from("event_attendees").select("event_id, profile_id, status"),
     supabase.from("profiles").select("id, full_name, handle"),
   ]);
@@ -29,5 +29,8 @@ export async function getAdminEvents(): Promise<AdminEvent[]> {
     eventAttendees.push({ profile_id: attendee.profile_id, status: attendee.status, fullName: profile.full_name, handle: profile.handle });
     attendees.set(attendee.event_id, eventAttendees);
   }
-  return (eventsResult.data ?? []).map((event) => ({ ...event, registrationCount: registrations.get(event.id) ?? 0, attendees: attendees.get(event.id) ?? [] }));
+  return Promise.all((eventsResult.data ?? []).map(async (event) => {
+    const posterResult = event.poster_path ? await supabase.storage.from("event-posters").createSignedUrl(event.poster_path, 60 * 30) : null;
+    return { ...event, registrationCount: registrations.get(event.id) ?? 0, attendees: attendees.get(event.id) ?? [], posterUrl: posterResult?.data?.signedUrl ?? null, effectiveStatus: event.status === "cancelled" ? "cancelled" : new Date(event.starts_at).getTime() <= Date.now() ? "past" : "upcoming" };
+  }));
 }
