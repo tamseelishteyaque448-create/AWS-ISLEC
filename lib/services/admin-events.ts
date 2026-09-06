@@ -29,8 +29,5 @@ export async function getAdminEvents(): Promise<AdminEvent[]> {
     eventAttendees.push({ profile_id: attendee.profile_id, status: attendee.status, fullName: profile.full_name, handle: profile.handle });
     attendees.set(attendee.event_id, eventAttendees);
   }
-  return Promise.all((eventsResult.data ?? []).map(async (event) => {
-    const posterResult = event.poster_path ? await supabase.storage.from("event-posters").createSignedUrl(event.poster_path, 60 * 30) : null;
-    return { ...event, registrationCount: registrations.get(event.id) ?? 0, attendees: attendees.get(event.id) ?? [], posterUrl: posterResult?.data?.signedUrl ?? null, effectiveStatus: event.status === "cancelled" ? "cancelled" : new Date(event.starts_at).getTime() <= Date.now() ? "past" : "upcoming" };
-  }));
+  return (eventsResult.data ?? []).map((event) => ({ ...event, registrationCount: registrations.get(event.id) ?? 0, attendees: attendees.get(event.id) ?? [], posterUrl: event.poster_path ? `/api/admin/events/${event.id}/poster` : null, effectiveStatus: event.status === "cancelled" ? "cancelled" : new Date(event.starts_at).getTime() <= Date.now() ? "past" : "upcoming" }));
 }

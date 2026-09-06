@@ -9,6 +9,11 @@ function text(value: FormDataEntryValue | null, maxLength: number, required = fa
   const normalized = value.trim().replace(/\s+/g, " ");
   return (required && !normalized) || normalized.length > maxLength ? null : normalized;
 }
+function multilineText(value: FormDataEntryValue | null, maxLength: number) {
+  if (typeof value !== "string") return "";
+  const normalized = value.replace(/\r\n?/g, "\n").trim();
+  return normalized.length <= maxLength ? normalized : null;
+}
 function utcDate(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
   const date = new Date(`${value}:00.000Z`);
@@ -30,7 +35,7 @@ export function validateEventInput(formData: FormData): { data: EventInput } | {
   const endsAt = endsAtValue === "" ? null : utcDate(endsAtValue);
   const locationValue = text(formData.get("location"), 200);
   const context = text(formData.get("context"), 2_000);
-  const details = text(formData.get("details"), 20_000);
+  const details = multilineText(formData.get("details"), 20_000);
   const posterAltValue = text(formData.get("poster_alt"), 200);
   const parsedCapacity = capacity(formData.get("capacity"));
   if (!title || !eventType || !statusValue || !EVENT_STATUSES.includes(statusValue as typeof EVENT_STATUSES[number]) || !startsAt || endsAt === undefined || locationValue === null || context === null || details === null || posterAltValue === null || parsedCapacity === undefined) return { error: "Check the required fields and use valid dates, status, and capacity." };

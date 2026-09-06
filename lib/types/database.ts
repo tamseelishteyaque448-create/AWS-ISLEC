@@ -731,6 +731,14 @@ export type Database = {
           registered_count: number
         }[]
       }
+      get_event_availabilities: {
+        Args: { p_event_ids: string[] }
+        Returns: {
+          available_slots: number | null
+          event_id: string
+          registered_count: number
+        }[]
+      }
       cancel_event_registration: {
         Args: { p_event_id: string }
         Returns: Json

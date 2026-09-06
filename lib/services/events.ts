@@ -15,7 +15,6 @@ export type CommunityEvent = EventWithPresentation & {
 };
 
 const EVENT_FIELDS = "id, slug, title, event_type, status, starts_at, ends_at, location, context, details, capacity, is_published, poster_path, poster_alt";
-const POSTER_BUCKET = "event-posters";
 
 function getEffectiveStatus(event: Pick<EventRow, "status" | "starts_at">, now = Date.now()): EventDisplayStatus {
   if (event.status === "cancelled") return "cancelled";
@@ -29,30 +28,40 @@ async function getAvailability(eventId: string): Promise<Availability> {
   return { registeredCount: data[0].registered_count, availableSlots: data[0].available_slots };
 }
 
-async function getPosterUrl(path: string | null): Promise<string | null> {
-  if (!path) return null;
+async function getAvailabilities(eventIds: string[]): Promise<Map<string, Availability>> {
+  if (eventIds.length === 0) return new Map();
   const supabase = await createClient();
-  const { data, error } = await supabase.storage.from(POSTER_BUCKET).createSignedUrl(path, 60 * 30);
-  return error ? null : data.signedUrl;
+  const { data, error } = await supabase.rpc("get_event_availabilities", { p_event_ids: eventIds });
+  if (error || (data?.length ?? 0) !== eventIds.length) throw new Error("Unable to load event availability.");
+  return new Map(data.map((row) => [row.event_id, { registeredCount: row.registered_count, availableSlots: row.available_slots }]));
 }
 
-async function presentEvent(event: EventRow): Promise<EventWithPresentation> {
-  const [availability, posterUrl] = await Promise.all([getAvailability(event.id), getPosterUrl(event.poster_path)]);
-  return { ...event, ...availability, posterUrl, effectiveStatus: getEffectiveStatus(event) };
+function presentEvent(event: EventRow, availability: Availability): EventWithPresentation {
+  return { ...event, ...availability, posterUrl: event.poster_path ? `/api/events/${event.slug}/poster` : null, effectiveStatus: getEffectiveStatus(event) };
+}
+
+async function presentEvents(events: EventRow[]): Promise<EventWithPresentation[]> {
+  const availability = await getAvailabilities(events.map((event) => event.id));
+  return events.map((event) => {
+    const value = availability.get(event.id);
+    if (!value) throw new Error("Unable to load event availability.");
+    return presentEvent(event, value);
+  });
 }
 
 export async function getPublicEvents(): Promise<EventWithPresentation[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("events").select(EVENT_FIELDS).eq("is_published", true).neq("status", "cancelled").order("starts_at", { ascending: true });
   if (error) throw new Error("Unable to load events.");
-  return Promise.all(((data ?? []) as EventRow[]).map(presentEvent));
+  return presentEvents((data ?? []) as EventRow[]);
 }
 
 export async function getPublicEventBySlug(slug: string): Promise<EventWithPresentation | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("events").select(EVENT_FIELDS).eq("slug", slug).eq("is_published", true).neq("status", "cancelled").maybeSingle();
   if (error) throw new Error("Unable to load event.");
-  return data ? presentEvent(data as EventRow) : null;
+  if (!data) return null;
+  return presentEvent(data as EventRow, await getAvailability(data.id));
 }
 
 export async function getMemberEvents(): Promise<CommunityEvent[]> {
@@ -65,7 +74,7 @@ export async function getMemberEvents(): Promise<CommunityEvent[]> {
   ]);
   if (eventsResult.error || attendanceResult.error) throw new Error("Unable to load member events.");
   const attendance = new Map((attendanceResult.data ?? []).map((row) => [row.event_id, row.status]));
-  const events = await Promise.all(((eventsResult.data ?? []) as EventRow[]).map(presentEvent));
+  const events = await presentEvents((eventsResult.data ?? []) as EventRow[]);
   return events.map((event) => ({ ...event, registrationStatus: (attendance.get(event.id) ?? null) as CommunityEvent["registrationStatus"], registrationOpen: event.is_published && event.effectiveStatus === "upcoming" && event.availableSlots !== 0, cancellationOpen: event.effectiveStatus === "upcoming" }));
 }
 
