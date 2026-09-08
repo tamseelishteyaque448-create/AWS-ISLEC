@@ -29,7 +29,7 @@ function parseNewBadges(value: Json | undefined): Array<{ title: string; points:
 }
 
 export type ChallengeCompletionState = {
-  status: "idle" | "error" | "completed" | "already_completed";
+  status: "idle" | "error" | "incorrect" | "completed" | "already_completed";
   message?: string;
   result?: CompletionResult;
 };
@@ -48,7 +48,7 @@ function parseCompletionResult(value: Json | null): CompletionResult | null {
   return { status, challengeId, pointsAwarded, totalPoints, streak, newBadges };
 }
 
-export async function completeChallenge(_previousState: ChallengeCompletionState, formData: FormData): Promise<ChallengeCompletionState> {
+export async function submitChallengeAnswer(_previousState: ChallengeCompletionState, formData: FormData): Promise<ChallengeCompletionState> {
   const claims = await getAuthenticatedClaims();
   if (!claims?.sub) return { status: "error", message: "Please sign in to complete a challenge." };
 
@@ -56,9 +56,22 @@ export async function completeChallenge(_previousState: ChallengeCompletionState
   if (typeof challengeId !== "string" || !UUID_PATTERN.test(challengeId)) return { status: "error", message: "That challenge is invalid." };
   const normalizedChallengeId = challengeId.toLowerCase();
 
+  const answers = formData.getAll("answer");
+  if (!answers.length || answers.length > 5 || answers.some((answer) => typeof answer !== "string" || !/^[a-z0-9-]{1,80}$/.test(answer))) {
+    return { status: "error", message: "Choose a valid answer before submitting." };
+  }
+
+  const choices = answers as string[];
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("complete_challenge", { p_challenge_id: normalizedChallengeId });
+  const { data, error } = await supabase.rpc("submit_challenge_answer", {
+    p_challenge_id: normalizedChallengeId,
+    p_answer: { choices },
+  });
   if (error) return { status: "error", message: "The challenge could not be completed. Please try again." };
+
+  if (data && typeof data === "object" && !Array.isArray(data) && data.status === "incorrect") {
+    return { status: "incorrect", message: "Not quite. Review the scenario and try again." };
+  }
 
   const result = parseCompletionResult(data);
   if (!result || result.challengeId !== normalizedChallengeId) return { status: "error", message: "The challenge returned an invalid completion result." };
@@ -69,7 +82,7 @@ export async function completeChallenge(_previousState: ChallengeCompletionState
   revalidatePath("/member/activities");
   revalidatePath("/member/achievements");
   revalidatePath("/member/leaderboard");
-  revalidatePath("/admin/challenges");
+  revalidatePath("/member/challenges/[slug]", "page");
 
   return { status: result.status, result, message: result.status === "completed" ? "Challenge completed." : "This challenge was already completed." };
 }

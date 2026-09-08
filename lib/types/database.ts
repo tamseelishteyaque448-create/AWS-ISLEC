@@ -293,6 +293,53 @@ export type Database = {
           },
         ]
       }
+      challenge_contents: {
+        Row: {
+          category: string
+          challenge_id: string
+          created_at: string
+          estimated_minutes: number
+          hint: string | null
+          options: Json
+          question: string
+          scenario: string
+          success_explanation: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          challenge_id: string
+          created_at?: string
+          estimated_minutes: number
+          hint?: string | null
+          options: Json
+          question: string
+          scenario: string
+          success_explanation?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          challenge_id?: string
+          created_at?: string
+          estimated_minutes?: number
+          hint?: string | null
+          options?: Json
+          question?: string
+          scenario?: string
+          success_explanation?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_contents_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: true
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_completion_badges: {
         Row: {
           badge_id: string
@@ -706,6 +753,13 @@ export type Database = {
     Functions: {
       complete_challenge: {
         Args: {
+          p_challenge_id: string
+        }
+        Returns: Json
+      }
+      submit_challenge_answer: {
+        Args: {
+          p_answer: Json
           p_challenge_id: string
         }
         Returns: Json

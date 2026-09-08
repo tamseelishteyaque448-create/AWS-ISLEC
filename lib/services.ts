@@ -34,6 +34,10 @@ type ProgressRow = Pick<
   Tables<"user_challenge_progress">,
   "challenge_id" | "progress" | "status"
 >;
+type ChallengeContentRow = Pick<
+  Tables<"challenge_contents">,
+  "challenge_id" | "category" | "estimated_minutes" | "scenario" | "question" | "options" | "hint" | "success_explanation"
+>;
 type ActivityRow = Pick<
   Tables<"activities">,
   "id" | "activity_type" | "title" | "detail" | "points" | "occurred_at"
@@ -67,6 +71,16 @@ export type DashboardChallenge = LearningChallenge & {
 export type MemberChallenge = LearningChallenge & {
   progress: number;
   status: "not_started" | "in_progress" | "completed";
+  category: string;
+  estimatedMinutes: number;
+};
+
+export type MemberChallengeDetail = MemberChallenge & {
+  scenario: string;
+  question: string;
+  options: Array<{ id: string; label: string }>;
+  hint: string | null;
+  successExplanation: string | null;
 };
 
 export type MemberBadge = {
@@ -404,7 +418,7 @@ export const supabaseRepository = {
     }
 
     const supabase = await createClient();
-    const [challengesResult, progressResult] = await Promise.all([
+    const [challengesResult, progressResult, contentsResult] = await Promise.all([
       supabase
         .from("challenges")
         .select("id, learning_path_id, slug, title, detail, level, points, sort_order, learning_paths!inner(is_published)")
@@ -415,21 +429,55 @@ export const supabaseRepository = {
         .from("user_challenge_progress")
         .select("challenge_id, progress, status")
         .eq("profile_id", claims.sub),
+      supabase
+        .from("challenge_contents")
+        .select("challenge_id, category, estimated_minutes, scenario, question, options, hint, success_explanation"),
     ]);
 
-    if (challengesResult.error || progressResult.error) {
+    if (challengesResult.error || progressResult.error || contentsResult.error) {
       throw new ChallengeListError();
     }
 
     const progressByChallenge = new Map(
       (progressResult.data as ProgressRow[]).map((progress) => [progress.challenge_id, progress]),
     );
+    const contentByChallenge = new Map(
+      (contentsResult.data as ChallengeContentRow[]).map((content) => [content.challenge_id, content]),
+    );
 
-    return challengesResult.data.map((challenge) => ({
+    return challengesResult.data.flatMap((challenge) => {
+      const content = contentByChallenge.get(challenge.id);
+      if (!content) return [];
+      return [{
       ...mapChallenge(challenge),
       progress: progressByChallenge.get(challenge.id)?.progress ?? 0,
       status: (progressByChallenge.get(challenge.id)?.status ?? "not_started") as MemberChallenge["status"],
-    }));
+      category: content.category,
+      estimatedMinutes: content.estimated_minutes,
+      }];
+    });
+  },
+
+  async getChallengeBySlug(slug: string): Promise<MemberChallengeDetail | null> {
+    const challenges = await this.getChallenges();
+    const challenge = challenges.find((item) => item.slug === slug);
+    if (!challenge) return null;
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("challenge_contents")
+      .select("scenario, question, options, hint, success_explanation")
+      .eq("challenge_id", challenge.id)
+      .maybeSingle();
+    if (error) throw new ChallengeListError();
+    if (!data || !Array.isArray(data.options)) return null;
+    const options = data.options.flatMap((option) => {
+      if (!option || typeof option !== "object" || Array.isArray(option)) return [];
+      const record = option as Record<string, unknown>;
+      return typeof record.id === "string" && typeof record.label === "string" ? [{ id: record.id, label: record.label }] : [];
+    });
+    if (options.length === 0) return null;
+    return { ...challenge, scenario: data.scenario, question: data.question, options, hint: data.hint, successExplanation: data.success_explanation };
   },
 
   async getLearningCatalogue() {
