@@ -844,6 +844,21 @@ export type Database = {
       transfer_project_ownership: { Args: { p_project_id: string; p_new_owner_id: string }; Returns: Json }
       recover_project_ownership: { Args: { p_project_id: string; p_new_owner_id: string; p_reason?: string }; Returns: Json }
       update_project_v1: { Args: { p_project_id: string; p_title: string; p_category: string; p_description: string; p_technologies: string[]; p_build_stage: string; p_recruitment_mode: string; p_team_capacity?: number | null; p_repository_url?: string | null; p_demo_url?: string | null }; Returns: Json }
+      admin_update_project_v1: {
+        Args: {
+          p_project_id:      string;
+          p_title:           string;
+          p_category:        string;
+          p_description:     string;
+          p_technologies:    string[];
+          p_build_stage:     string;
+          p_recruitment_mode: string;
+          p_team_capacity?:  number | null;
+          p_repository_url?: string | null;
+          p_demo_url?:       string | null;
+        };
+        Returns: Json;
+      }
       review_project_member: {
         Args: { p_action: string; p_profile_id: string; p_project_id: string }
         Returns: Json
