@@ -2,9 +2,11 @@ import { MemberDirectory } from "@/components/admin/MemberDirectory";
 import { MemberInvitationForm } from "@/components/admin/MemberInvitationForm";
 import { PageIntro } from "@/components/cards/PageIntro";
 import { getAdminMembers, getMemberDirectoryPage, getMemberDirectorySearch } from "@/lib/services/admin-members";
+import { requireAdmin } from "@/lib/auth/admin";
 import { redirect } from "next/navigation";
 
 export default async function AdminMembersPage({ searchParams }: PageProps<"/admin/members">) {
+  await requireAdmin();
   const params = await searchParams;
   const search = getMemberDirectorySearch(params.q);
   const page = getMemberDirectoryPage(params.page);
