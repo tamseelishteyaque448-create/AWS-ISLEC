@@ -21,7 +21,7 @@ export default async function AboutPage() {
   const projects = snapshot?.projects ?? [];
   const events = snapshot?.events.filter((event) => event.status === "upcoming") ?? [];
   const paths = snapshot?.learningPaths ?? [];
-  const shippedProjects = projects.filter((project) => project.status === "shipped");
+  const shippedProjects = projects.filter((project) => project.build_stage === "shipped");
 
   return <>
     <section className="about-hero">

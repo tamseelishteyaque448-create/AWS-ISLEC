@@ -28,7 +28,7 @@ export type AdminCommunityOverview = {
   members: Array<{ id: string; fullName: string; handle: string; points: number }>;
   events: Array<{ id: string; title: string; eventType: string; startsAt: string }>;
   challenges: Array<{ id: string; title: string; detail: string; level: string; points: number }>;
-  projects: Array<{ id: string; title: string; category: string; status: string; progress: number }>;
+  projects: Array<{ id: string; title: string; category: string; buildStage: string }>;
   activities: Array<{ id: string; title: string; detail: string; points: number; occurredAt: string }>;
 };
 
@@ -39,7 +39,7 @@ export async function getAdminCommunityOverview(): Promise<AdminCommunityOvervie
   const [membersResult, challengesResult, projectsResult, eventsResult, activitiesResult] = await Promise.all([
     supabase.from("profiles").select("id, full_name, handle, points", { count: "exact" }).order("points", { ascending: false }).order("created_at", { ascending: true }).limit(5),
     supabase.from("challenges").select("id, title, detail, level, points, learning_paths!inner(is_published)", { count: "exact" }).eq("is_published", true).eq("learning_paths.is_published", true).order("sort_order", { ascending: true }).limit(5),
-    supabase.from("projects").select("id, title, category, status, progress", { count: "exact" }).eq("status", "in_progress").order("updated_at", { ascending: false }).limit(5),
+    supabase.from("projects").select("id, title, category, build_stage", { count: "exact" }).eq("publication_state", "published").neq("build_stage", "shipped").order("updated_at", { ascending: false }).limit(5),
     supabase.from("events").select("id, title, event_type, starts_at", { count: "exact" }).eq("status", "upcoming").gt("starts_at", now).order("starts_at", { ascending: true }).limit(3),
     supabase.from("activities").select("id, title, detail, points, occurred_at").order("occurred_at", { ascending: false }).limit(5),
   ]);
@@ -56,7 +56,7 @@ export async function getAdminCommunityOverview(): Promise<AdminCommunityOvervie
     members: (membersResult.data ?? []).map((member) => ({ id: member.id, fullName: member.full_name, handle: member.handle, points: member.points })),
     events: (eventsResult.data ?? []).map((event) => ({ id: event.id, title: event.title, eventType: event.event_type, startsAt: event.starts_at })),
     challenges: (challengesResult.data ?? []).map((challenge) => ({ id: challenge.id, title: challenge.title, detail: challenge.detail, level: challenge.level, points: challenge.points })),
-    projects: projectsResult.data ?? [],
+    projects: (projectsResult.data ?? []).map((project) => ({ id: project.id, title: project.title, category: project.category, buildStage: project.build_stage })),
     activities: (activitiesResult.data ?? []).map((activity) => ({ id: activity.id, title: activity.title, detail: activity.detail, points: activity.points, occurredAt: activity.occurred_at })),
   };
 }
