@@ -88,3 +88,66 @@ export async function getAdminProjects(): Promise<AdminProject[]> {
   }
   return ((projects.data ?? []) as ProjectRow[]).map((project) => ({ ...project, members: membersByProject.get(project.id) ?? [] }));
 }
+
+// ---------------------------------------------------------------------------
+// V2.1 — Skill proofs
+// ---------------------------------------------------------------------------
+
+export type JoinRequestProof = {
+  id: string;
+  proofType: string;
+  title: string;
+  description: string;
+  url: string | null;
+  createdAt: string;
+};
+
+export type WorkspaceJoinRequest = {
+  id: string;
+  profileId: string;
+  fullName: string;
+  handle: string;
+  contribution: string;
+  message: string;
+  status: string;
+  proofs: JoinRequestProof[];
+};
+
+/** Replaces the old requests shape in getMemberProjectWorkspace for V2.1 */
+export async function getMemberProjectWorkspaceV2(projectId: string): Promise<(ProjectWorkspace & { requestsV2: WorkspaceJoinRequest[] }) | null> {
+  const claims = await getAuthenticatedClaims();
+  if (!claims?.sub) return null;
+  const supabase = await createClient();
+  const { data: project, error: projectError } = await supabase.from("projects").select(PROJECT_FIELDS).eq("id", projectId).maybeSingle();
+  if (projectError || !project) return null;
+  const [membersResult, requestsResult, reviewsResult, profilesResult, proofsResult] = await Promise.all([
+    supabase.from("project_members").select("project_id, profile_id, role, status, joined_at, submitted_at, reviewed_at").eq("project_id", projectId),
+    supabase.from("project_join_requests").select("id, profile_id, requested_contribution, message, status").eq("project_id", projectId),
+    supabase.from("project_reviews").select("decision, feedback, created_at").eq("project_id", projectId).order("created_at", { ascending: false }),
+    supabase.from("profiles").select("id, full_name, handle"),
+    supabase.from("project_join_request_proofs").select("id, request_id, proof_type, title, description, url, created_at"),
+  ]);
+  if (membersResult.error || requestsResult.error || reviewsResult.error || profilesResult.error) throw new Error("Unable to load project workspace.");
+  const profiles = new Map((profilesResult.data ?? []).map((p) => [p.id, p]));
+  const proofsByRequest = new Map<string, JoinRequestProof[]>();
+  for (const proof of proofsResult.data ?? []) {
+    const list = proofsByRequest.get(proof.request_id) ?? [];
+    list.push({ id: proof.id, proofType: proof.proof_type, title: proof.title, description: proof.description, url: proof.url, createdAt: proof.created_at });
+    proofsByRequest.set(proof.request_id, list);
+  }
+  const members = (membersResult.data ?? []).flatMap((m) => { const p = profiles.get(m.profile_id); return p ? [{ ...m, fullName: p.full_name, handle: p.handle }] : []; });
+  const requests = (requestsResult.data ?? []).flatMap((r) => { const p = profiles.get(r.profile_id); return p ? [{ id: r.id, profileId: r.profile_id, fullName: p.full_name, handle: p.handle, contribution: r.requested_contribution, message: r.message, status: r.status }] : []; });
+  const requestsV2: WorkspaceJoinRequest[] = requests.map((r) => ({ ...r, proofs: proofsByRequest.get(r.id) ?? [] }));
+  return { ...(project as ProjectRow), members, requests, requestsV2, reviews: (reviewsResult.data ?? []).map((r) => ({ decision: r.decision, feedback: r.feedback, createdAt: r.created_at })) };
+}
+
+/** Gets the active join request for the current member on a project, including proofs */
+export async function getMyJoinRequest(projectId: string): Promise<{ id: string; contribution: string; message: string; status: string; proofs: JoinRequestProof[] } | null> {
+  const claims = await getAuthenticatedClaims();
+  if (!claims?.sub) return null;
+  const supabase = await createClient();
+  const { data: request } = await supabase.from("project_join_requests").select("id, requested_contribution, message, status").eq("project_id", projectId).eq("profile_id", claims.sub).order("requested_at", { ascending: false }).limit(1).maybeSingle();
+  if (!request) return null;
+  const { data: proofs } = await supabase.from("project_join_request_proofs").select("id, proof_type, title, description, url, created_at").eq("request_id", request.id).order("created_at", { ascending: true });
+  return { id: request.id, contribution: request.requested_contribution, message: request.message, status: request.status, proofs: (proofs ?? []).map((p) => ({ id: p.id, proofType: p.proof_type, title: p.title, description: p.description, url: p.url, createdAt: p.created_at })) };
+}

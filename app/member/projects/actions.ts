@@ -40,3 +40,29 @@ export async function withdrawProjectJoinRequest(_: ProjectMemberState, formData
 export async function resolveProjectJoinRequest(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> { return (await workspaceRpc(formData, "resolve_project_join_request")) as ProjectMemberState; }
 export async function transferProjectOwnership(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> { return (await workspaceRpc(formData, "transfer_project_ownership")) as ProjectMemberState; }
 export async function updateMemberProject(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> { if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." }; const id = formData.get("project_id"); const title = clean(formData.get("title"), 160, true); const category = clean(formData.get("category"), 80, true); const description = clean(formData.get("description"), 2000); const stage = formData.get("build_stage"); const recruitment = formData.get("recruitment_mode"); const capacityText = formData.get("team_capacity"); const capacity = typeof capacityText === "string" && capacityText ? Number(capacityText) : null; const repository = clean(formData.get("repository_url"), 500); const demo = clean(formData.get("demo_url"), 500); const technologies = typeof formData.get("technologies") === "string" ? [...new Set((formData.get("technologies") as string).split(",").map((value) => value.trim()).filter(Boolean))].slice(0, 12) : []; if (typeof id !== "string" || !UUID.test(id) || !title || !category || description === null || repository === null || demo === null || !["idea","building","prototype","shipped"].includes(String(stage)) || !["open","invite_only","not_recruiting"].includes(String(recruitment)) || (capacity !== null && (!Number.isInteger(capacity) || capacity < 1 || capacity > 100)) || technologies.some((item) => item.length > 60)) return { status: "error", message: "Check the project details." }; const { error } = await (await createClient()).rpc("update_project_v1", { p_project_id: id, p_title: title, p_category: category, p_description: description, p_technologies: technologies, p_build_stage: String(stage), p_recruitment_mode: String(recruitment), p_team_capacity: capacity, p_repository_url: repository || null, p_demo_url: demo || null }); if (error) return { status: "error", message: "The project cannot be edited in its current state." }; revalidatePath("/member/projects"); return { status: "success", message: "Project updated." }; }
+
+export async function addJoinRequestProof(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const requestId = formData.get("request_id");
+  const proofType = formData.get("proof_type");
+  const title = clean(formData.get("title"), 120, true);
+  const description = clean(formData.get("description"), 500) ?? "";
+  const url = clean(formData.get("url"), 500, true);
+  if (!title || !url || typeof requestId !== "string" || !UUID.test(requestId)) return { status: "error", message: "Check the proof details." };
+  const { error } = await (await createClient()).rpc("add_join_request_proof", { p_request_id: requestId, p_proof_type: String(proofType), p_title: title, p_description: description, p_url: url });
+  if (error) return { status: "error", message: "The proof could not be added." };
+  revalidatePath("/member/projects");
+  revalidatePath("/member/projects/[id]", "page");
+  return { status: "success", message: "Proof added." };
+}
+
+export async function removeJoinRequestProof(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const proofId = formData.get("proof_id");
+  if (typeof proofId !== "string" || !UUID.test(proofId)) return { status: "error", message: "Invalid proof." };
+  const { error } = await (await createClient()).rpc("remove_join_request_proof", { p_proof_id: proofId });
+  if (error) return { status: "error", message: "The proof could not be removed." };
+  revalidatePath("/member/projects");
+  revalidatePath("/member/projects/[id]", "page");
+  return { status: "success", message: "Proof removed." };
+}

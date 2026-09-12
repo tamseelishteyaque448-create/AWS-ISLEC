@@ -618,6 +618,12 @@ export type Database = {
         Update: { id?: string; project_id?: string; profile_id?: string; requested_contribution?: string; message?: string; status?: string; requested_at?: string; resolved_at?: string | null; resolved_by?: string | null }
         Relationships: []
       }
+      project_join_request_proofs: {
+        Row: { id: string; request_id: string; proof_type: string; title: string; description: string; url: string | null; created_at: string }
+        Insert: { id?: string; request_id: string; proof_type: string; title: string; description?: string; url?: string | null; created_at?: string }
+        Update: { id?: string; request_id?: string; proof_type?: string; title?: string; description?: string; url?: string | null; created_at?: string }
+        Relationships: []
+      }
       project_reviews: {
         Row: { id: string; project_id: string; reviewer_id: string; decision: string; feedback: string; created_at: string }
         Insert: { id?: string; project_id: string; reviewer_id: string; decision: string; feedback?: string; created_at?: string }
@@ -873,6 +879,14 @@ export type Database = {
       }
       register_for_event: {
         Args: { p_event_id: string }
+        Returns: Json
+      }
+      add_join_request_proof: {
+        Args: { p_request_id: string; p_proof_type: string; p_title: string; p_description: string; p_url: string }
+        Returns: Json
+      }
+      remove_join_request_proof: {
+        Args: { p_proof_id: string }
         Returns: Json
       }
     }
