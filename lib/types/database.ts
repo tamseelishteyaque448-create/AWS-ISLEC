@@ -808,6 +808,10 @@ export type Database = {
           member_count: number
         }[]
       }
+      get_admin_analytics_v1: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       get_event_availability: {
         Args: { p_event_id: string }
         Returns: {

@@ -1,7 +1,9 @@
-import { AdminPlaceholder } from "@/components/admin/AdminPlaceholder";
+import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
+import { getAdminAnalytics } from "@/lib/services/admin-analytics";
 import { requireAdmin } from "@/lib/auth/admin";
 
 export default async function AdminAnalyticsPage() {
   await requireAdmin();
-  return <AdminPlaceholder title="Analytics, with context." description="Community health and programme insights will live here." />;
+  const analytics = await getAdminAnalytics();
+  return <AdminAnalytics analytics={analytics} />;
 }
