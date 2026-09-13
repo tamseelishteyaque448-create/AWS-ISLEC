@@ -1,0 +1,155 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: auth-corrected.spec.ts >> Authentication & Authorization Runtime Verification - CORRECTED >> AUTH-01: Anonymous /member access redirects to login
+- Location: tests\e2e\auth-corrected.spec.ts:5:7
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: locator('form')
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" locator('form') with timeout 5000ms
+  - waiting for locator('form')
+
+```
+
+```yaml
+- heading "404" [level=1]
+- heading "This page could not be found." [level=2]
+- alert
+```
+
+# Test source
+
+```ts
+  1   | ﻿import { test, expect } from '@playwright/test';
+  2   | 
+  3   | test.describe('Authentication & Authorization Runtime Verification - CORRECTED', () => {
+  4   |   
+  5   |   test('AUTH-01: Anonymous /member access redirects to login', async ({ page }) => {
+  6   |     await page.goto('/member');
+  7   |     await page.waitForURL('**/join*');
+  8   |     
+  9   |     const currentUrl = page.url();
+  10  |     console.log('AUTH-01 Redirect URL:', currentUrl);
+  11  |     
+  12  |     expect(currentUrl).toContain('/join');
+  13  |     expect(currentUrl).toContain('mode=login');
+  14  |     // Fix: Check for URL-encoded version
+  15  |     expect(currentUrl).toMatch(/next=%2Fmember|next=\/member/);
+  16  |     
+> 17  |     await expect(page.locator('form')).toBeVisible();
+      |                                        ^ Error: expect(locator).toBeVisible() failed
+  18  |     console.log('✅ AUTH-01 PASS: Anonymous /member access properly redirected');
+  19  |   });
+  20  | 
+  21  |   test('AUTH-02: Anonymous /admin access redirects appropriately', async ({ page }) => {
+  22  |     await page.goto('/admin');
+  23  |     await page.waitForURL('**/join*');
+  24  |     
+  25  |     const currentUrl = page.url();
+  26  |     console.log('AUTH-02 Redirect URL:', currentUrl);
+  27  |     
+  28  |     expect(currentUrl).toContain('/join');
+  29  |     expect(currentUrl).toContain('mode=login');
+  30  |     expect(currentUrl).toMatch(/next=%2Fadmin|next=\/admin/);
+  31  |     
+  32  |     console.log('✅ AUTH-02 PASS: Anonymous /admin access properly redirected');
+  33  |   });
+  34  | 
+  35  |   test('AUTH-03: Anonymous /member/projects access denied', async ({ page }) => {
+  36  |     await page.goto('/member/projects');
+  37  |     await page.waitForURL('**/join*');
+  38  |     
+  39  |     const currentUrl = page.url();
+  40  |     console.log('AUTH-03 Redirect URL:', currentUrl);
+  41  |     
+  42  |     expect(currentUrl).toContain('/join');
+  43  |     expect(currentUrl).toMatch(/next=%2Fmember%2Fprojects|next=\/member\/projects/);
+  44  |     
+  45  |     console.log('✅ AUTH-03 PASS: Anonymous /member/projects access denied');
+  46  |   });
+  47  | 
+  48  |   test('AUTH-11: Invalid credentials handling', async ({ page }) => {
+  49  |     await page.goto('/join?mode=login');
+  50  |     
+  51  |     const emailField = page.locator('input[type="email"], input[name*="email"]').first();
+  52  |     const passwordField = page.locator('input[type="password"], input[name*="password"]').first();
+  53  |     
+  54  |     await emailField.fill('invalid@nonexistent.test');
+  55  |     await passwordField.fill('wrongpassword');
+  56  |     
+  57  |     const consoleErrors: string[] = [];
+  58  |     page.on('console', (msg) => {
+  59  |       if (msg.type() === 'error') {
+  60  |         consoleErrors.push(msg.text());
+  61  |       }
+  62  |     });
+  63  |     
+  64  |     const submitButton = page.locator('button[type="submit"], button:has-text("Log in"), button:has-text("Sign in")').first();
+  65  |     await submitButton.click();
+  66  |     
+  67  |     await page.waitForTimeout(3000);
+  68  |     
+  69  |     const pageContent = await page.textContent('body');
+  70  |     const unsafePatterns = [
+  71  |       'sql', 'database', 'supabase', 'postgres', 'auth.users', 'private.', 'service_role', 'secret'
+  72  |     ];
+  73  |     
+  74  |     for (const pattern of unsafePatterns) {
+  75  |       expect(pageContent?.toLowerCase() || '').not.toContain(pattern.toLowerCase());
+  76  |     }
+  77  |     
+  78  |     console.log('Console errors (safe 400 expected):', consoleErrors);
+  79  |     console.log('✅ AUTH-11 PASS: Invalid credentials handled safely');
+  80  |   });
+  81  | 
+  82  |   test('AUTH-14-SECURITY: External redirect vulnerability test', async ({ page }) => {
+  83  |     // Test 1: Valid internal redirect should work
+  84  |     await page.goto('/join?mode=login&next=/member/profile');
+  85  |     await expect(page.locator('form')).toBeVisible();
+  86  |     
+  87  |     const validUrl = page.url();
+  88  |     expect(validUrl).toMatch(/next=%2Fmember%2Fprofile|next=\/member\/profile/);
+  89  |     
+  90  |     // Test 2: External redirect should be blocked or sanitized
+  91  |     await page.goto('/join?mode=login&next=https://evil.com');
+  92  |     
+  93  |     const maliciousUrl = page.url();
+  94  |     console.log('🔍 SECURITY TEST - External redirect URL:', maliciousUrl);
+  95  |     
+  96  |     // CRITICAL: Check if external redirect is allowed
+  97  |     if (maliciousUrl.includes('evil.com')) {
+  98  |       console.log('🚨 POTENTIAL SECURITY ISSUE: External redirect not blocked');
+  99  |       console.log('URL contains external domain in next parameter');
+  100 |       
+  101 |       // This is a finding, not necessarily a failure if properly handled on login
+  102 |       // Need to test if actual login would redirect externally
+  103 |     } else {
+  104 |       console.log('✅ External redirect properly blocked in URL parameter');
+  105 |     }
+  106 |     
+  107 |     // Test 3: Protocol-relative redirect
+  108 |     await page.goto('/join?mode=login&next=//evil.com');
+  109 |     const protocolRelativeUrl = page.url();
+  110 |     console.log('🔍 Protocol-relative test URL:', protocolRelativeUrl);
+  111 |     
+  112 |     // Test 4: JavaScript protocol
+  113 |     await page.goto('/join?mode=login&next=javascript:alert(1)');
+  114 |     const jsProtocolUrl = page.url();
+  115 |     console.log('🔍 JavaScript protocol test URL:', jsProtocolUrl);
+  116 |     
+  117 |     console.log('⚠️ AUTH-14 SECURITY ANALYSIS: External redirect handling requires further investigation');
+```
