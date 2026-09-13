@@ -19,4 +19,5 @@
 | Projects V2.2 Phase A — Database Foundation | Milestones/tasks schema, RLS, table grants, and the six protected workspace RPCs added. | Approved; authenticated runtime/database verification gap remains. |
 | Projects V2.2 Phase B — Service / Read Model | Workspace read model and service integration added. | Approved; authenticated runtime verification gap remains. |
 | Projects V2.2 Phase C — Server Actions | Server-action mutation bridge for the workspace RPCs added. | Approved; authenticated runtime verification gap remains. |
-| Projects V2.2 Phase D — Member Workspace UI | Current phase: integrate the member workspace UI and directly related components/CSS only. | READY TO IMPLEMENT. Phase E is reserved for runtime/E2E verification. |
+| Projects V2.2 Phase D — Member Workspace UI | Member workspace Overview, Team, and Work integration completed. | Static validation passed; authenticated runtime verification gap remains. |
+| Projects V2.2 Phase E — Runtime + Authenticated E2E Verification | Current phase: verification only; defects must be reported and not fixed. | READY TO VERIFY. |
