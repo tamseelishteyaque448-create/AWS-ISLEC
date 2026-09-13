@@ -1,5 +1,13 @@
 ﻿import { test, expect } from '@playwright/test';
 
+function expectLoginRedirect(currentUrl: string, expectedNext: string) {
+  const url = new URL(currentUrl);
+
+  expect(url.pathname).toBe('/join');
+  expect(url.searchParams.get('mode')).toBe('login');
+  expect(url.searchParams.get('next')).toBe(expectedNext);
+}
+
 test.describe('Authentication & Authorization Runtime Verification', () => {
   
   test('AUTH-01: Anonymous /member access redirects to login', async ({ page }) => {
@@ -13,10 +21,8 @@ test.describe('Authentication & Authorization Runtime Verification', () => {
     const currentUrl = page.url();
     console.log('AUTH-01 Redirect URL:', currentUrl);
     
-    // Verify redirect contains expected parameters
-    expect(currentUrl).toContain('/join');
-    expect(currentUrl).toContain('mode=login');
-    expect(currentUrl).toContain('next=/member');
+    // URLSearchParams returns the decoded next value.
+    expectLoginRedirect(currentUrl, '/member');
     
     // Verify login form is present
     await expect(page.locator('form')).toBeVisible();
@@ -35,9 +41,7 @@ test.describe('Authentication & Authorization Runtime Verification', () => {
     const currentUrl = page.url();
     console.log('AUTH-02 Redirect URL:', currentUrl);
     
-    expect(currentUrl).toContain('/join');
-    expect(currentUrl).toContain('mode=login');
-    expect(currentUrl).toContain('next=/admin');
+    expectLoginRedirect(currentUrl, '/admin');
     
     console.log('✅ AUTH-02 PASS: Anonymous /admin access properly redirected');
   });
@@ -52,8 +56,7 @@ test.describe('Authentication & Authorization Runtime Verification', () => {
     const currentUrl = page.url();
     console.log('AUTH-03 Redirect URL:', currentUrl);
     
-    expect(currentUrl).toContain('/join');
-    expect(currentUrl).toContain('next=/member/projects');
+    expectLoginRedirect(currentUrl, '/member/projects');
     
     console.log('✅ AUTH-03 PASS: Anonymous /member/projects access denied');
   });
@@ -127,19 +130,21 @@ test.describe('Authentication & Authorization Runtime Verification', () => {
     await expect(page.locator('form')).toBeVisible();
     
     const currentUrl = page.url();
-    expect(currentUrl).toContain('next=/member/profile');
+    const validUrl = new URL(currentUrl);
+    expect(validUrl.searchParams.get('next')).toBe('/member/profile');
     
     // Test potential external redirect attack (should be blocked)
     await page.goto('/join?mode=login&next=https://evil.com');
     
-    // Application should sanitize or reject external redirects
-    const maliciousUrl = page.url();
-    console.log('Malicious redirect test URL:', maliciousUrl);
-    
-    // Should not redirect to external domain
-    expect(maliciousUrl).not.toContain('evil.com');
-    
-    console.log('✅ AUTH-14 PASS: Next parameter redirect safety verified');
+    // Before authentication, the app may retain the requested value in the URL,
+    // but it must not navigate to the untrusted origin.
+    const maliciousUrl = new URL(page.url());
+    console.log('Malicious redirect test URL:', maliciousUrl.toString());
+    expect(maliciousUrl.origin).toBe(validUrl.origin);
+    expect(maliciousUrl.searchParams.get('next')).toBe('https://evil.com');
+
+    // NOT VERIFIED: final post-auth redirect behavior requires a least-privilege test account.
+    console.log('⚠️ AUTH-14 NOT VERIFIED: Final post-auth redirect requires a least-privilege test account.');
   });
 
   test('AUTH-INVITE: Invite flow accessibility check', async ({ page }) => {
