@@ -612,6 +612,26 @@ export type Database = {
           },
         ]
       }
+      project_milestones: {
+        Row: { id: string; project_id: string; title: string; description: string; sort_order: number; is_archived: boolean; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; project_id: string; title: string; description?: string; sort_order?: number; is_archived?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; project_id?: string; title?: string; description?: string; sort_order?: number; is_archived?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: "project_milestones_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_milestones_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ]
+      }
+      project_tasks: {
+        Row: { id: string; project_id: string; milestone_id: string; title: string; description: string; assignee_id: string | null; status: string; sort_order: number; is_archived: boolean; created_by: string | null; created_at: string; updated_at: string; completed_at: string | null }
+        Insert: { id?: string; project_id: string; milestone_id: string; title: string; description?: string; assignee_id?: string | null; status?: string; sort_order?: number; is_archived?: boolean; created_by?: string | null; created_at?: string; updated_at?: string; completed_at?: string | null }
+        Update: { id?: string; project_id?: string; milestone_id?: string; title?: string; description?: string; assignee_id?: string | null; status?: string; sort_order?: number; is_archived?: boolean; created_by?: string | null; created_at?: string; updated_at?: string; completed_at?: string | null }
+        Relationships: [
+          { foreignKeyName: "project_tasks_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_tasks_milestone_id_fkey"; columns: ["milestone_id"]; isOneToOne: false; referencedRelation: "project_milestones"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_tasks_assignee_id_fkey"; columns: ["assignee_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "project_tasks_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ]
+      }
       project_join_requests: {
         Row: { id: string; project_id: string; profile_id: string; requested_contribution: string; message: string; status: string; requested_at: string; resolved_at: string | null; resolved_by: string | null }
         Insert: { id?: string; project_id: string; profile_id: string; requested_contribution?: string; message?: string; status?: string; requested_at?: string; resolved_at?: string | null; resolved_by?: string | null }

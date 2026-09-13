@@ -19,6 +19,7 @@ export type AdminProjectMember = MembershipRow & { fullName: string; handle: str
 export type AdminProject = ProjectRow & { members: AdminProjectMember[] };
 export type ProjectWorkspace = ProjectRow & { members: AdminProjectMember[]; requests: Array<{ id: string; profileId: string; fullName: string; handle: string; contribution: string; message: string; status: string }>; reviews: Array<{ decision: string; feedback: string; createdAt: string }> };
 const PROJECT_FIELDS = "id, slug, title, category, description, technologies, created_at, updated_at, publication_state, build_stage, recruitment_mode, team_capacity, repository_url, demo_url";
+const WORKSPACE_PROJECT_FIELDS = `${PROJECT_FIELDS}, created_by`;
 
 export async function getPublicProjects(): Promise<ProjectRow[]> {
   const supabase = await createClient();
@@ -110,35 +111,164 @@ export type WorkspaceJoinRequest = {
   contribution: string;
   message: string;
   status: string;
+  requestedAt?: string;
+  resolvedAt?: string | null;
   proofs: JoinRequestProof[];
 };
 
-/** Replaces the old requests shape in getMemberProjectWorkspace for V2.1 */
-export async function getMemberProjectWorkspaceV2(projectId: string): Promise<(ProjectWorkspace & { requestsV2: WorkspaceJoinRequest[] }) | null> {
+type WorkspaceProfile = Pick<Tables<"profiles">, "id" | "full_name" | "handle" | "avatar_url">;
+type WorkspaceMilestoneRow = Tables<"project_milestones">;
+type WorkspaceTaskRow = Tables<"project_tasks">;
+
+export type WorkspaceMember = MembershipRow & {
+  fullName: string;
+  handle: string;
+  avatarUrl: string | null;
+};
+
+export type WorkspaceMilestoneState = "empty" | "in_progress" | "complete";
+
+export type WorkspaceMilestone = WorkspaceMilestoneRow & {
+  state: WorkspaceMilestoneState | null;
+  activeTaskCount: number;
+  completedActiveTaskCount: number;
+};
+
+export type WorkspaceTask = WorkspaceTaskRow & {
+  assignee: { id: string; fullName: string; handle: string; avatarUrl: string | null; isActiveMember: boolean } | null;
+};
+
+export type ProjectWorkspaceV2 = Omit<ProjectWorkspace, "members" | "requests"> & {
+  creator: { id: string; fullName: string; handle: string; avatarUrl: string | null } | null;
+  members: WorkspaceMember[];
+  activeMembers: WorkspaceMember[];
+  owner: WorkspaceMember | null;
+  requests: ProjectWorkspace["requests"];
+  requestsV2: WorkspaceJoinRequest[];
+  milestones: WorkspaceMilestone[];
+  tasks: WorkspaceTask[];
+  progress: { totalActiveTasks: number; completedActiveTasks: number; progressPercentage: number };
+  contributorCurrentMilestone: WorkspaceMilestone | null;
+  displayCurrentMilestone: WorkspaceMilestone | null;
+  latestCompletedMilestone: WorkspaceMilestone | null;
+};
+
+const ACTIVE_WORKSPACE_MEMBER_STATUSES = new Set(["active", "submitted", "completed"]);
+
+function sortByWorkspaceOrder<T extends { sort_order: number; id: string }>(left: T, right: T) {
+  return left.sort_order - right.sort_order || left.id.localeCompare(right.id);
+}
+
+/** Reads the private V2.2 workspace. RLS remains the authorization authority. */
+export async function getMemberProjectWorkspaceV2(projectId: string): Promise<ProjectWorkspaceV2 | null> {
   const claims = await getAuthenticatedClaims();
   if (!claims?.sub) return null;
   const supabase = await createClient();
-  const { data: project, error: projectError } = await supabase.from("projects").select(PROJECT_FIELDS).eq("id", projectId).maybeSingle();
+  const { data: project, error: projectError } = await supabase.from("projects").select(WORKSPACE_PROJECT_FIELDS).eq("id", projectId).maybeSingle();
   if (projectError || !project) return null;
-  const [membersResult, requestsResult, reviewsResult, profilesResult, proofsResult] = await Promise.all([
+
+  const [membersResult, reviewsResult, milestonesResult, tasksResult] = await Promise.all([
     supabase.from("project_members").select("project_id, profile_id, role, status, joined_at, submitted_at, reviewed_at").eq("project_id", projectId),
-    supabase.from("project_join_requests").select("id, profile_id, requested_contribution, message, status").eq("project_id", projectId),
     supabase.from("project_reviews").select("decision, feedback, created_at").eq("project_id", projectId).order("created_at", { ascending: false }),
-    supabase.from("profiles").select("id, full_name, handle"),
-    supabase.from("project_join_request_proofs").select("id, request_id, proof_type, title, description, url, created_at"),
+    supabase.from("project_milestones").select("id, project_id, title, description, sort_order, is_archived, created_by, created_at, updated_at").eq("project_id", projectId).order("sort_order", { ascending: true }).order("id", { ascending: true }),
+    supabase.from("project_tasks").select("id, project_id, milestone_id, title, description, assignee_id, status, sort_order, is_archived, created_by, created_at, updated_at, completed_at").eq("project_id", projectId).order("sort_order", { ascending: true }).order("id", { ascending: true }),
   ]);
-  if (membersResult.error || requestsResult.error || reviewsResult.error || profilesResult.error) throw new Error("Unable to load project workspace.");
-  const profiles = new Map((profilesResult.data ?? []).map((p) => [p.id, p]));
+  if (membersResult.error || reviewsResult.error || milestonesResult.error || tasksResult.error) throw new Error("Unable to load project workspace.");
+
+  const memberships = (membersResult.data ?? []) as MembershipRow[];
+  const viewerMembership = memberships.find((member) => member.profile_id === claims.sub);
+  const isOwner = viewerMembership?.role === "owner" && viewerMembership.status === "active";
+  const requestsResult = await (isOwner
+    ? supabase.from("project_join_requests").select("id, profile_id, requested_contribution, message, status, requested_at, resolved_at").eq("project_id", projectId).eq("status", "requested").order("requested_at", { ascending: true })
+    : Promise.resolve({ data: [], error: null }));
+  if (requestsResult.error) throw new Error("Unable to load project workspace.");
+
+  const rawMilestones = (milestonesResult.data ?? []) as WorkspaceMilestoneRow[];
+  const rawTasks = (tasksResult.data ?? []) as WorkspaceTaskRow[];
+  const milestoneById = new Map(rawMilestones.map((milestone) => [milestone.id, milestone]));
+  for (const task of rawTasks) {
+    const milestone = milestoneById.get(task.milestone_id);
+    if (!milestone || milestone.project_id !== task.project_id || task.project_id !== projectId) {
+      throw new Error("Project workspace data is inconsistent.");
+    }
+  }
+
+  const requestIds = (requestsResult.data ?? []).map((request) => request.id);
+  const profileIds = new Set<string>([
+    ...memberships.map((member) => member.profile_id),
+    ...rawTasks.flatMap((task) => task.assignee_id ? [task.assignee_id] : []),
+    ...(project.created_by ? [project.created_by] : []),
+    ...(requestsResult.data ?? []).map((request) => request.profile_id),
+  ]);
+  const [profilesResult, proofsResult] = await Promise.all([
+    profileIds.size > 0
+      ? supabase.from("profiles").select("id, full_name, handle, avatar_url").in("id", [...profileIds])
+      : Promise.resolve({ data: [], error: null }),
+    requestIds.length > 0
+      ? supabase.from("project_join_request_proofs").select("id, request_id, proof_type, title, description, url, created_at").in("request_id", requestIds).order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (profilesResult.error || proofsResult.error) throw new Error("Unable to load project workspace.");
+
+  const profiles = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile as WorkspaceProfile]));
   const proofsByRequest = new Map<string, JoinRequestProof[]>();
   for (const proof of proofsResult.data ?? []) {
     const list = proofsByRequest.get(proof.request_id) ?? [];
     list.push({ id: proof.id, proofType: proof.proof_type, title: proof.title, description: proof.description, url: proof.url, createdAt: proof.created_at });
     proofsByRequest.set(proof.request_id, list);
   }
-  const members = (membersResult.data ?? []).flatMap((m) => { const p = profiles.get(m.profile_id); return p ? [{ ...m, fullName: p.full_name, handle: p.handle }] : []; });
-  const requests = (requestsResult.data ?? []).flatMap((r) => { const p = profiles.get(r.profile_id); return p ? [{ id: r.id, profileId: r.profile_id, fullName: p.full_name, handle: p.handle, contribution: r.requested_contribution, message: r.message, status: r.status }] : []; });
-  const requestsV2: WorkspaceJoinRequest[] = requests.map((r) => ({ ...r, proofs: proofsByRequest.get(r.id) ?? [] }));
-  return { ...(project as ProjectRow), members, requests, requestsV2, reviews: (reviewsResult.data ?? []).map((r) => ({ decision: r.decision, feedback: r.feedback, createdAt: r.created_at })) };
+  const allMembers = memberships.flatMap((member) => {
+    const profile = profiles.get(member.profile_id);
+    return profile ? [{ ...member, fullName: profile.full_name, handle: profile.handle, avatarUrl: profile.avatar_url }] : [];
+  });
+  const activeMembers = allMembers.filter((member) => ACTIVE_WORKSPACE_MEMBER_STATUSES.has(member.status));
+  const requests = (requestsResult.data ?? []).flatMap((request) => {
+    const profile = profiles.get(request.profile_id);
+    return profile ? [{ id: request.id, profileId: request.profile_id, fullName: profile.full_name, handle: profile.handle, contribution: request.requested_contribution, message: request.message, status: request.status, requestedAt: request.requested_at, resolvedAt: request.resolved_at }] : [];
+  });
+  const requestsV2: WorkspaceJoinRequest[] = requests.map((request) => ({ ...request, proofs: proofsByRequest.get(request.id) ?? [] }));
+
+  const tasksByMilestone = new Map<string, WorkspaceTaskRow[]>();
+  for (const task of rawTasks) {
+    const tasks = tasksByMilestone.get(task.milestone_id) ?? [];
+    tasks.push(task);
+    tasksByMilestone.set(task.milestone_id, tasks);
+  }
+  const milestones = rawMilestones.map((milestone) => {
+    const activeTasks = milestone.is_archived ? [] : (tasksByMilestone.get(milestone.id) ?? []).filter((task) => !task.is_archived);
+    const completedActiveTaskCount = activeTasks.filter((task) => task.status === "completed").length;
+    const state = milestone.is_archived ? null : activeTasks.length === 0 ? "empty" : completedActiveTaskCount === activeTasks.length ? "complete" : "in_progress";
+    return { ...milestone, state, activeTaskCount: activeTasks.length, completedActiveTaskCount } satisfies WorkspaceMilestone;
+  }).sort(sortByWorkspaceOrder);
+  const activeMemberIds = new Set(activeMembers.map((member) => member.profile_id));
+  const tasks = rawTasks.map((task) => {
+    const profile = task.assignee_id ? profiles.get(task.assignee_id) : undefined;
+    return { ...task, assignee: profile ? { id: profile.id, fullName: profile.full_name, handle: profile.handle, avatarUrl: profile.avatar_url, isActiveMember: activeMemberIds.has(profile.id) } : null } satisfies WorkspaceTask;
+  }).sort(sortByWorkspaceOrder);
+  const activeWorkspaceTasks = rawTasks.filter((task) => !task.is_archived && !milestoneById.get(task.milestone_id)?.is_archived);
+  const completedActiveTasks = activeWorkspaceTasks.filter((task) => task.status === "completed").length;
+  const progressPercentage = activeWorkspaceTasks.length === 0 ? 0 : Math.min(100, Math.floor((completedActiveTasks * 100) / activeWorkspaceTasks.length));
+  const nonArchivedMilestones = milestones.filter((milestone) => !milestone.is_archived);
+  const contributorCurrentMilestone = nonArchivedMilestones.find((milestone) => milestone.state !== "complete") ?? null;
+  const latestCompletedMilestone = [...nonArchivedMilestones].reverse().find((milestone) => milestone.state === "complete") ?? null;
+  const creatorProfile = project.created_by ? profiles.get(project.created_by) : undefined;
+
+  return {
+    ...(project as ProjectRow),
+    creator: creatorProfile ? { id: creatorProfile.id, fullName: creatorProfile.full_name, handle: creatorProfile.handle, avatarUrl: creatorProfile.avatar_url } : null,
+    members: activeMembers,
+    activeMembers,
+    owner: activeMembers.find((member) => member.role === "owner") ?? null,
+    requests,
+    requestsV2,
+    reviews: (reviewsResult.data ?? []).map((review) => ({ decision: review.decision, feedback: review.feedback, createdAt: review.created_at })),
+    milestones,
+    tasks,
+    progress: { totalActiveTasks: activeWorkspaceTasks.length, completedActiveTasks, progressPercentage },
+    contributorCurrentMilestone,
+    displayCurrentMilestone: contributorCurrentMilestone,
+    latestCompletedMilestone,
+  };
 }
 
 /** Gets the active join request for the current member on a project, including proofs */
