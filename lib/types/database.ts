@@ -807,6 +807,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_project_milestone: {
+        Args: { p_project_id: string; p_title: string; p_description?: string; p_sort_order?: number }
+        Returns: Json
+      }
+      archive_project_milestone: {
+        Args: { p_project_id: string; p_milestone_id: string }
+        Returns: Json
+      }
+      create_project_task: {
+        Args: { p_project_id: string; p_milestone_id: string; p_title: string; p_description?: string; p_assignee_id?: string | null; p_sort_order?: number }
+        Returns: Json
+      }
+      update_task_status: {
+        Args: { p_project_id: string; p_task_id: string; p_status: string }
+        Returns: Json
+      }
+      assign_task: {
+        Args: { p_project_id: string; p_task_id: string; p_assignee_id?: string | null }
+        Returns: Json
+      }
+      archive_task: {
+        Args: { p_project_id: string; p_task_id: string }
+        Returns: Json
+      }
       complete_challenge: {
         Args: {
           p_challenge_id: string

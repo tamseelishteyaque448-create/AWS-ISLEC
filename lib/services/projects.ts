@@ -180,7 +180,7 @@ export async function getMemberProjectWorkspaceV2(projectId: string): Promise<Pr
   const isOwner = viewerMembership?.role === "owner" && viewerMembership.status === "active";
   const requestsResult = await (isOwner
     ? supabase.from("project_join_requests").select("id, profile_id, requested_contribution, message, status, requested_at, resolved_at").eq("project_id", projectId).eq("status", "requested").order("requested_at", { ascending: true })
-    : Promise.resolve({ data: [], error: null }));
+    : supabase.from("project_join_requests").select("id, profile_id, requested_contribution, message, status, requested_at, resolved_at").eq("project_id", projectId).eq("profile_id", claims.sub).eq("status", "requested").order("requested_at", { ascending: true }));
   if (requestsResult.error) throw new Error("Unable to load project workspace.");
 
   const rawMilestones = (milestonesResult.data ?? []) as WorkspaceMilestoneRow[];

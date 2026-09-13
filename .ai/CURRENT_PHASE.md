@@ -1,14 +1,22 @@
 # CURRENT PHASE
 
-## PROJECTS V2.2 — PHASE A
+## PROJECTS V2.2 — PHASE D — MEMBER WORKSPACE UI
 
 **Status:** READY TO IMPLEMENT  
-**Scope:** DATABASE FOUNDATION ONLY
+**Scope:** MEMBER WORKSPACE UI INTEGRATION
 
-Allowed: migrations; `project_milestones`; `project_tasks`; indexes; constraints; `updated_at`; RLS; table grants; the six V2.2 RPCs; database verification.
+Phase A — Database Foundation is complete and approved, with the known authenticated-runtime verification gap.
 
-Forbidden: services, server actions, React, UI, CSS, points, activities, build-stage changes, notifications, realtime, GitHub integration, task priority, due dates, comments, subtasks, dependencies.
+Phase B — Service / Read Model is implemented and approved, with the known authenticated-runtime verification gap.
 
-Exit condition: database verified + security verified + migration parity + tsc + lint + build + `git diff --check`.
+Phase C — Server Actions is implemented and approved, with the known authenticated-runtime verification gap.
+
+Allowed: member workspace UI; directly related UI components; directly related CSS.
+
+Forbidden: database migrations; tables; RLS; RPCs; unrelated services; unrelated domains; points; activities; build-stage changes; notifications; realtime; GitHub integration; task priority; due dates; comments; subtasks; dependencies.
+
+Phase E remains reserved for authenticated runtime and E2E verification.
+
+Exit condition: member workspace UI is implemented and static checks pass. Authenticated runtime and E2E verification remain Phase E work.
 
 Then stop.

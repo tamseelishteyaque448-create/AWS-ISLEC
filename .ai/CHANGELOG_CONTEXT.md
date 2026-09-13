@@ -16,3 +16,7 @@
 | Progression / Points / Stages | Point economy, monotonic stage engine and integration into authoritative mutations added. | Source inspected; runtime NOT VERIFIED. |
 | Historical Evidence Hardening | Historical approved-project predicate corrected for submitted/completed memberships. | Source inspected; runtime NOT VERIFIED. |
 | Projects V2.2 Research/Frozen Contract | Future workspace Phase A contract frozen; no implementation migration exists. | Contract documented; implementation NOT VERIFIED/not started. |
+| Projects V2.2 Phase A — Database Foundation | Milestones/tasks schema, RLS, table grants, and the six protected workspace RPCs added. | Approved; authenticated runtime/database verification gap remains. |
+| Projects V2.2 Phase B — Service / Read Model | Workspace read model and service integration added. | Approved; authenticated runtime verification gap remains. |
+| Projects V2.2 Phase C — Server Actions | Server-action mutation bridge for the workspace RPCs added. | Approved; authenticated runtime verification gap remains. |
+| Projects V2.2 Phase D — Member Workspace UI | Current phase: integrate the member workspace UI and directly related components/CSS only. | READY TO IMPLEMENT. Phase E is reserved for runtime/E2E verification. |

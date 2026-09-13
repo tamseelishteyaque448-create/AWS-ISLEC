@@ -66,3 +66,130 @@ export async function removeJoinRequestProof(_: ProjectMemberState, formData: Fo
   revalidatePath("/member/projects/[id]", "page");
   return { status: "success", message: "Proof removed." };
 }
+
+const TASK_STATUSES = ["todo", "in_progress", "blocked", "completed"] as const;
+
+function nonNegativeInteger(value: FormDataEntryValue | null): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : null;
+}
+
+function optionalUuid(value: FormDataEntryValue | null): string | null | undefined {
+  if (value === null || (typeof value === "string" && value.trim() === "")) return null;
+  return typeof value === "string" && UUID.test(value) ? value : undefined;
+}
+
+function revalidateMemberProjectWorkspace(projectId: string) {
+  revalidatePath(`/member/projects/${projectId}`);
+}
+
+function workspaceActionFailure(fallback: string): ProjectMemberState {
+  return { status: "error", message: fallback };
+}
+
+export async function createProjectMilestone(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const projectId = formData.get("project_id");
+  const title = clean(formData.get("title"), 120, true);
+  const description = clean(formData.get("description"), 500);
+  const sortOrder = nonNegativeInteger(formData.get("sort_order"));
+  if (typeof projectId !== "string" || !UUID.test(projectId) || !title || description === null || sortOrder === null) {
+    return { status: "error", message: "Check the milestone details." };
+  }
+
+  const { error } = await (await createClient()).rpc("create_project_milestone", {
+    p_project_id: projectId,
+    p_title: title,
+    p_description: description,
+    p_sort_order: sortOrder,
+  });
+  if (error) return workspaceActionFailure("The milestone could not be created.");
+  revalidateMemberProjectWorkspace(projectId);
+  return { status: "success", message: "Milestone created." };
+}
+
+export async function archiveProjectMilestone(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const projectId = formData.get("project_id");
+  const milestoneId = formData.get("milestone_id");
+  if (typeof projectId !== "string" || typeof milestoneId !== "string" || !UUID.test(projectId) || !UUID.test(milestoneId)) {
+    return { status: "error", message: "Invalid milestone." };
+  }
+
+  const { error } = await (await createClient()).rpc("archive_project_milestone", { p_project_id: projectId, p_milestone_id: milestoneId });
+  if (error) return workspaceActionFailure("The milestone cannot be archived right now.");
+  revalidateMemberProjectWorkspace(projectId);
+  return { status: "success", message: "Milestone archived." };
+}
+
+export async function createProjectTask(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const projectId = formData.get("project_id");
+  const milestoneId = formData.get("milestone_id");
+  const title = clean(formData.get("title"), 200, true);
+  const description = clean(formData.get("description"), 2000);
+  const assigneeId = optionalUuid(formData.get("assignee_id"));
+  const sortOrder = nonNegativeInteger(formData.get("sort_order"));
+  if (typeof projectId !== "string" || typeof milestoneId !== "string" || !UUID.test(projectId) || !UUID.test(milestoneId)
+    || !title || description === null || assigneeId === undefined || sortOrder === null) {
+    return { status: "error", message: "Check the task details." };
+  }
+
+  const { error } = await (await createClient()).rpc("create_project_task", {
+    p_project_id: projectId,
+    p_milestone_id: milestoneId,
+    p_title: title,
+    p_description: description,
+    p_assignee_id: assigneeId,
+    p_sort_order: sortOrder,
+  });
+  if (error) return workspaceActionFailure("The task could not be created.");
+  revalidateMemberProjectWorkspace(projectId);
+  return { status: "success", message: "Task created." };
+}
+
+export async function updateProjectTaskStatus(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const projectId = formData.get("project_id");
+  const taskId = formData.get("task_id");
+  const status = formData.get("status");
+  if (typeof projectId !== "string" || typeof taskId !== "string" || typeof status !== "string"
+    || !UUID.test(projectId) || !UUID.test(taskId) || !TASK_STATUSES.includes(status as typeof TASK_STATUSES[number])) {
+    return { status: "error", message: "Invalid task status." };
+  }
+
+  const { error } = await (await createClient()).rpc("update_task_status", { p_project_id: projectId, p_task_id: taskId, p_status: status });
+  if (error) return workspaceActionFailure("The task status could not be updated.");
+  revalidateMemberProjectWorkspace(projectId);
+  return { status: "success", message: "Task status updated." };
+}
+
+export async function assignProjectTask(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const projectId = formData.get("project_id");
+  const taskId = formData.get("task_id");
+  const assigneeId = optionalUuid(formData.get("assignee_id"));
+  if (typeof projectId !== "string" || typeof taskId !== "string" || !UUID.test(projectId) || !UUID.test(taskId) || assigneeId === undefined) {
+    return { status: "error", message: "Invalid task assignment." };
+  }
+
+  const { error } = await (await createClient()).rpc("assign_task", { p_project_id: projectId, p_task_id: taskId, p_assignee_id: assigneeId });
+  if (error) return workspaceActionFailure("The task assignment could not be updated.");
+  revalidateMemberProjectWorkspace(projectId);
+  return { status: "success", message: assigneeId ? "Task assigned." : "Task unassigned." };
+}
+
+export async function archiveProjectTask(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
+  if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
+  const projectId = formData.get("project_id");
+  const taskId = formData.get("task_id");
+  if (typeof projectId !== "string" || typeof taskId !== "string" || !UUID.test(projectId) || !UUID.test(taskId)) {
+    return { status: "error", message: "Invalid task." };
+  }
+
+  const { error } = await (await createClient()).rpc("archive_task", { p_project_id: projectId, p_task_id: taskId });
+  if (error) return workspaceActionFailure("The task cannot be archived right now.");
+  revalidateMemberProjectWorkspace(projectId);
+  return { status: "success", message: "Task archived." };
+}
