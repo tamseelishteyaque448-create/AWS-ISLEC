@@ -30,7 +30,14 @@ function url(value: FormDataEntryValue | null): string | null | undefined {
   // null      = validation failure (malformed non-empty URL)
   if (typeof value !== "string" || value.trim() === "") return undefined;
   const normalized = value.trim();
-  return /^https?:\/\//.test(normalized) && normalized.length <= 500 ? normalized : null;
+  if (normalized.length > 500 || !/^https?:\/\//i.test(normalized)) return null;
+
+  try {
+    const parsed = new URL(normalized);
+    return parsed.hostname ? normalized : null;
+  } catch {
+    return null;
+  }
 }
 
 export function getProjectId(value: FormDataEntryValue | null): string | null {
@@ -53,16 +60,10 @@ export function validateProjectInput(
   const repositoryRaw      = formData.get("repository_url");
   const demoRaw            = formData.get("demo_url");
 
+  const rawTechnologies = formData.get("technologies");
   const technologies: string[] =
-    typeof formData.get("technologies") === "string"
-      ? [
-          ...new Set(
-            (formData.get("technologies") as string)
-              .split(",")
-              .map((v) => v.trim())
-              .filter(Boolean),
-          ),
-        ].slice(0, 12)
+    typeof rawTechnologies === "string"
+      ? [...new Set(rawTechnologies.split(",").map((v) => v.trim()).filter(Boolean))]
       : [];
 
   // Validate required text fields.
@@ -93,6 +94,9 @@ export function validateProjectInput(
   }
 
   // Technologies.
+  if (technologies.length > 12) {
+    return { error: "Choose 12 technologies or fewer." };
+  }
   if (technologies.some((v) => v.length > 60)) {
     return { error: "Each technology name must be 60 characters or fewer." };
   }
