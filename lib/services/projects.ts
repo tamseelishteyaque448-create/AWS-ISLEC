@@ -26,6 +26,7 @@ export type MemberProjectRequest = {
   contribution: string;
   message: string;
   requestedAt: string;
+  proofs: JoinRequestProof[];
 };
 export type MemberProjectExperience = Pick<ProjectRow, "id" | "title" | "category" | "description" | "technologies" | "build_stage" | "publication_state" | "recruitment_mode" | "team_capacity" | "repository_url" | "demo_url"> & {
   membership: { role: string; status: string } | null;
@@ -230,6 +231,24 @@ export async function getMemberProjectExperience(projectId: string): Promise<Mem
   }
   if (!projectResult.data) return null;
 
+  let proofs: JoinRequestProof[] = [];
+  if (requestResult.data) {
+    const proofsResult = await supabase
+      .from("project_join_request_proofs")
+      .select("id, proof_type, title, description, url, created_at")
+      .eq("request_id", requestResult.data.id)
+      .order("created_at", { ascending: true });
+    if (proofsResult.error) throw new Error("Unable to load project details.");
+    proofs = (proofsResult.data ?? []).map((proof) => ({
+      id: proof.id,
+      proofType: proof.proof_type,
+      title: proof.title,
+      description: proof.description,
+      url: proof.url,
+      createdAt: proof.created_at,
+    }));
+  }
+
   return {
     ...(projectResult.data as ProjectRow),
     membership: membershipResult.data ? { role: membershipResult.data.role, status: membershipResult.data.status } : null,
@@ -238,6 +257,7 @@ export async function getMemberProjectExperience(projectId: string): Promise<Mem
       contribution: requestResult.data.requested_contribution,
       message: requestResult.data.message,
       requestedAt: requestResult.data.requested_at,
+      proofs,
     } : null,
   };
 }
