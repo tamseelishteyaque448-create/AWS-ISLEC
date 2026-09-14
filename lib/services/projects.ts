@@ -21,6 +21,16 @@ export type MemberExploreProject = Pick<ProjectRow, "id" | "title" | "category" 
   joinRequestStatus: string | null;
 };
 export type MemberProjectsDashboard = { myProjects: CommunityProject[] };
+export type MemberProjectRequest = {
+  id: string;
+  contribution: string;
+  message: string;
+  requestedAt: string;
+};
+export type MemberProjectExperience = Pick<ProjectRow, "id" | "title" | "category" | "description" | "technologies" | "build_stage" | "publication_state" | "recruitment_mode" | "team_capacity" | "repository_url" | "demo_url"> & {
+  membership: { role: string; status: string } | null;
+  request: MemberProjectRequest | null;
+};
 export type AdminProjectMember = MembershipRow & { fullName: string; handle: string };
 export type AdminProject = ProjectRow & { members: AdminProjectMember[] };
 export type ProjectWorkspace = ProjectRow & { members: AdminProjectMember[]; requests: Array<{ id: string; profileId: string; fullName: string; handle: string; contribution: string; message: string; status: string }>; reviews: Array<{ decision: string; feedback: string; createdAt: string }> };
@@ -203,6 +213,33 @@ export async function getMemberExploreProjects(): Promise<MemberExploreProject[]
 export async function getMemberProjectsDashboard(): Promise<MemberProjectsDashboard> {
   const projects = await getMemberProjects();
   return { myProjects: projects };
+}
+
+/** Reads only the project/detail relationship data needed before workspace authorization. */
+export async function getMemberProjectExperience(projectId: string): Promise<MemberProjectExperience | null> {
+  const claims = await getAuthenticatedClaims();
+  if (!claims?.sub) return null;
+  const supabase = await createClient();
+  const [projectResult, membershipResult, requestResult] = await Promise.all([
+    supabase.from("projects").select(PROJECT_FIELDS).eq("id", projectId).maybeSingle(),
+    supabase.from("project_members").select("role, status").eq("project_id", projectId).eq("profile_id", claims.sub).maybeSingle(),
+    supabase.from("project_join_requests").select("id, requested_contribution, message, requested_at").eq("project_id", projectId).eq("profile_id", claims.sub).eq("status", "requested").maybeSingle(),
+  ]);
+  if (projectResult.error || membershipResult.error || requestResult.error) {
+    throw new Error("Unable to load project details.");
+  }
+  if (!projectResult.data) return null;
+
+  return {
+    ...(projectResult.data as ProjectRow),
+    membership: membershipResult.data ? { role: membershipResult.data.role, status: membershipResult.data.status } : null,
+    request: requestResult.data ? {
+      id: requestResult.data.id,
+      contribution: requestResult.data.requested_contribution,
+      message: requestResult.data.message,
+      requestedAt: requestResult.data.requested_at,
+    } : null,
+  };
 }
 
 /** Reads the private V2.2 workspace. RLS remains the authorization authority. */
