@@ -133,7 +133,7 @@ export async function reviewProjectMember(
 // ---------------------------------------------------------------------------
 // reviewProjectPublication
 // Calls review_project_publication (admin-only, SECURITY DEFINER).
-// Decisions: approved | changes_requested | archived
+// Decisions: approved | changes_requested | archived. Approved also republishes archives.
 // ---------------------------------------------------------------------------
 export async function reviewProjectPublication(
   _: ProjectFormState,

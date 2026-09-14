@@ -890,6 +890,7 @@ export type Database = {
         Returns: Json
       }
       create_project_v1: { Args: { p_title: string; p_slug: string; p_category: string; p_description: string; p_technologies: string[]; p_recruitment_mode?: string; p_team_capacity?: number | null }; Returns: Json }
+      delete_project_v1: { Args: { p_project_id: string }; Returns: Json }
       request_project_join: { Args: { p_project_id: string; p_contribution?: string; p_message?: string }; Returns: Json }
       submit_project_for_review: { Args: { p_project_id: string }; Returns: Json }
       withdraw_project_join_request: { Args: { p_request_id: string }; Returns: Json }

@@ -83,8 +83,8 @@ function EmptyDiscoveryState({ filtered, onClear }: { filtered: boolean; onClear
 
   return (
     <section className="project-discovery-empty panel">
-      <h2>No community projects yet.</h2>
-      <p className="muted">Be one of the first builders to create something. New published projects will appear here.</p>
+      <h2>No published projects are available.</h2>
+      <p className="muted">Projects appear here after an administrator publishes them. You can also create a draft and submit it for review.</p>
       <Link className="button" href="/member/projects">Create a project</Link>
     </section>
   );

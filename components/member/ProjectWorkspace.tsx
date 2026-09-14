@@ -8,6 +8,7 @@ import {
   assignProjectTask,
   createProjectMilestone,
   createProjectTask,
+  deleteMemberProject,
   resolveProjectJoinRequest,
   submitProjectForReview,
   transferProjectOwnership,
@@ -161,6 +162,7 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
   const [transferState, transferAction, transferPending] = useActionState(transferProjectOwnership, initial);
   const [editState, editAction, editPending] = useActionState(updateMemberProject, initial);
   const [submitState, submitAction, submitPending] = useActionState(submitProjectForReview, initial);
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteMemberProject, initial);
 
   const tabs = [
     { id: "overview" as const, label: "Overview", icon: FolderKanban },
@@ -223,6 +225,7 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
             Project settings are read-only while this project is {project.publication_state.replace("_", " ")}.
           </p>}
           {(project.publication_state === "draft" || project.publication_state === "changes_requested") && <form action={submitAction} className="workspace-submit-review"><input type="hidden" name="project_id" value={project.id} /><button className="button button-secondary" disabled={submitPending}>{submitPending ? "Submitting..." : "Submit for review"}</button><Message state={submitState} /></form>}
+          {isOwner && <div className="workspace-danger-action"><p className="muted">Deleting removes this project, requests, proofs, milestones, tasks, and project history permanently.</p><form action={deleteAction}><input type="hidden" name="project_id" value={project.id} /><button className="button button-secondary" type="submit" disabled={deletePending} onClick={(event) => { if (!confirm("Permanently delete this project and all requests, proofs, milestones, tasks, and history? This cannot be undone.")) event.preventDefault(); }}>{deletePending ? "Deleting..." : "Delete project permanently"}</button><Message state={deleteState} /></form></div>}
         </details>}
       </div>
 
