@@ -21,14 +21,31 @@ export async function submitProjectWork(_: ProjectMemberState, formData: FormDat
 }
 function clean(value: FormDataEntryValue | null, max: number, required = false) { const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""; return (required && !text) || text.length > max ? null : text; }
 function slug(title: string) { return `${title.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 100) || "project"}-${crypto.randomUUID().slice(0, 8)}`; }
+function creationFailure(error: { code?: string; message?: string }): ProjectMemberState {
+  if (error.code === "23505") return { status: "error", message: "A project with this title already exists. Choose a different title." };
+  if (error.code === "42501") return { status: "error", message: "Your account is not authorized to create projects." };
+  if (error.code === "22023") return { status: "error", message: "Check the project details and try again." };
+  if (error.code === "PGRST202" || error.code === "42883") {
+    return { status: "error", message: "Project creation is temporarily unavailable. Please contact an administrator." };
+  }
+  console.error("Member project creation failed", { code: error.code, message: error.message });
+  return { status: "error", message: "Project creation failed. Please try again." };
+}
 export async function createMemberProject(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
   if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." };
   const title = clean(formData.get("title"), 160, true); const category = clean(formData.get("category"), 80, true); const description = clean(formData.get("description"), 2000);
   const recruitment = formData.get("recruitment_mode"); const capacityValue = formData.get("team_capacity"); const capacity = typeof capacityValue === "string" && capacityValue ? Number(capacityValue) : null;
   const technologies = typeof formData.get("technologies") === "string" ? [...new Set((formData.get("technologies") as string).split(",").map((item) => item.trim()).filter(Boolean))].slice(0, 12) : [];
   if (!title || !category || description === null || !["open", "invite_only", "not_recruiting"].includes(String(recruitment)) || (capacity !== null && (!Number.isInteger(capacity) || capacity < 1 || capacity > 100)) || technologies.some((item) => item.length > 60)) return { status: "error", message: "Check the project details." };
-  const supabase = await createClient(); const { error } = await supabase.rpc("create_project_v1", { p_title: title, p_slug: slug(title), p_category: category, p_description: description, p_technologies: technologies, p_recruitment_mode: String(recruitment), p_team_capacity: capacity });
-  if (error) return { status: "error", message: "The project could not be created." }; revalidatePath("/member/projects"); return { status: "success", message: "Draft project created. You are its owner." };
+  const supabase = await createClient(); const { data, error } = await supabase.rpc("create_project_v1", { p_title: title, p_slug: slug(title), p_category: category, p_description: description, p_technologies: technologies, p_recruitment_mode: String(recruitment), p_team_capacity: capacity });
+  if (error) return creationFailure(error);
+  const projectId = data && typeof data === "object" && "project_id" in data && typeof data.project_id === "string" ? data.project_id : null;
+  if (!projectId || !UUID.test(projectId)) {
+    console.error("Project creation returned an invalid project id");
+    return { status: "error", message: "Project creation did not complete. Please try again." };
+  }
+  revalidatePath("/member/projects"); revalidatePath("/member/explore"); revalidatePath("/admin/projects");
+  redirect(`/member/projects/${projectId}`);
 }
 export async function requestProjectJoin(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {
   if (!(await getAuthenticatedClaims())?.sub) return { status: "error", message: "Please sign in first." }; const id = formData.get("project_id"); const contribution = clean(formData.get("contribution"), 120) ?? ""; const message = clean(formData.get("message"), 1000) ?? "";
