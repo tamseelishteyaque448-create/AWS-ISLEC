@@ -40,14 +40,15 @@ if (qaValues.NEXT_PUBLIC_SUPABASE_URL === productionSupabaseUrl) {
   throw new Error("Refusing to start QA mode with the production Supabase URL.");
 }
 
-const child = spawn(
-  process.platform === "win32" ? "npm.cmd" : "npm",
-  ["run", "dev", "--", ...process.argv.slice(2)],
-  {
-    stdio: "inherit",
-    env: { ...process.env, ...qaValues },
-  },
-);
+const isWindows = process.platform === "win32";
+const command = isWindows ? (process.env.ComSpec ?? "cmd.exe") : "npm";
+const args = isWindows
+  ? ["/d", "/s", "/c", "npm run dev"]
+  : ["run", "dev", "--", ...process.argv.slice(2)];
+const child = spawn(command, args, {
+  stdio: "inherit",
+  env: { ...process.env, ...qaValues },
+});
 
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);
