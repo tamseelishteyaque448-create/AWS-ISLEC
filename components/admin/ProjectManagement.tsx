@@ -89,7 +89,7 @@ function Form({ project }: { project?: AdminProject }) {
     <details className={project ? "admin-event-edit" : "admin-event-create"}>
       <summary>
         {project ? (
-          <><Pencil size={15} />Edit</>
+          <><Pencil size={15} />Edit project details</>
         ) : (
           <><FolderKanban size={17} />Create project</>
         )}
@@ -160,8 +160,21 @@ function Team({ project }: { project: AdminProject }) {
 
 function PublicationReview({ project }: { project: AdminProject }) {
   const [state, action, pending] = useActionState(reviewProjectPublication, initialProjectFormState);
+  const reviewStatus = {
+    draft: ["Draft", "The owner must submit this project for review before it can be published."],
+    pending_review: ["Awaiting review", "Review the project details, then approve it or request changes."],
+    changes_requested: ["Changes requested", "The owner must update the project and submit it again."],
+    published: ["Published", "This project is visible to members in Explore."],
+    archived: ["Archived", "This project is hidden from member discovery. Republish when ready."],
+  }[project.publication_state];
+
   return (
-    <form action={action} className="admin-event-actions">
+    <div className={`admin-project-review admin-project-review-${project.publication_state}`}>
+      <div className="admin-project-review-copy">
+        <span className="admin-project-review-label">{reviewStatus[0]}</span>
+        <p>{reviewStatus[1]}</p>
+      </div>
+      <form action={action} className="admin-event-actions">
       <input type="hidden" name="project_id" value={project.id} />
       {project.publication_state === "pending_review" ? (
         <>
@@ -203,7 +216,8 @@ function PublicationReview({ project }: { project: AdminProject }) {
       {state.message ? (
         <p className={`admin-event-message ${state.status}`}>{state.message}</p>
       ) : null}
-    </form>
+      </form>
+    </div>
   );
 }
 
@@ -244,6 +258,9 @@ export function ProjectManagement({ projects }: { projects: AdminProject[] }) {
           <div className="eyebrow">Project studio</div>
           <h2>Projects, in motion.</h2>
           <p>Review publication requests and retain an operational view of projects.</p>
+          <div className="admin-project-flow">
+            <span>1. Owner submits</span><span>2. Admin approves</span><span>3. Members discover</span>
+          </div>
         </div>
         <span className="admin-directory-icon"><FolderKanban size={21} /></span>
       </div>
@@ -267,7 +284,13 @@ export function ProjectManagement({ projects }: { projects: AdminProject[] }) {
             <OwnershipRecovery project={project} />
             <Team project={project} />
           </div>
-          <Form project={project} />
+          <aside className="admin-project-editor">
+            <div className="admin-project-editor-heading">
+              <span className="eyebrow">Project editor</span>
+              <span>Details & links</span>
+            </div>
+            <Form project={project} />
+          </aside>
         </article>
       ))}
     </section>
