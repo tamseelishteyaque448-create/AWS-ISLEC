@@ -203,10 +203,16 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
       </div>
 
       <div id={`${tabPrefix}-overview-panel`} role="tabpanel" aria-labelledby={`${tabPrefix}-overview-tab`} hidden={activeTab !== "overview"} className="workspace-panel">
+        <div className="workspace-overview-summary">
+          <article><span className="eyebrow">Stage</span><strong>{project.build_stage}</strong><small>Current build phase</small></article>
+          <article><span className="eyebrow">Team</span><strong>{project.members.length}</strong><small>{project.members.length === 1 ? "Active member" : "Active members"}</small></article>
+          <article><span className="eyebrow">Milestones</span><strong>{visibleMilestones.length}</strong><small>{visibleMilestones.length === 1 ? "Current milestone" : "Current milestones"}</small></article>
+          <article><span className="eyebrow">Tasks</span><strong>{project.progress.totalActiveTasks}</strong><small>{project.progress.completedActiveTasks} completed</small></article>
+        </div>
         <div className="workspace-overview-grid">
           <article className="workspace-card">
-            <span className="eyebrow">What we are building</span>
-            <h2>{project.build_stage}</h2>
+            <div className="workspace-card-heading"><span className="eyebrow">What we are building</span><span className={`workspace-state ${project.publication_state}`}>{project.publication_state.replace("_", " ")}</span></div>
+            <h2>{project.title}</h2>
             <p>{project.description}</p>
             {project.technologies.length > 0 && <div className="project-tech-list">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>}
           </article>
