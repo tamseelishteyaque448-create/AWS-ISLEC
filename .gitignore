@@ -17,3 +17,4 @@ out/
 
 supabase/.temp/
 supabase/.branches/
+test-results/
