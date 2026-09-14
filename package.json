@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:qa": "node scripts/dev-qa.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint app components data lib proxy.ts",
