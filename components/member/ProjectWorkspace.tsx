@@ -177,6 +177,18 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
           <p className="eyebrow">{project.category} / {project.publication_state.replace("_", " ")}</p>
           <h1>{project.title}</h1>
           <p>{project.description}</p>
+          {isOwner && (project.publication_state === "draft" || project.publication_state === "changes_requested") && (
+            <div className="workspace-publish-prompt">
+              <p>{project.publication_state === "draft" ? "Your project is private until it is reviewed and published." : "Make the requested changes, then submit this project for review again."}</p>
+              <form action={submitAction}>
+                <input type="hidden" name="project_id" value={project.id} />
+                <button className="button" type="submit" disabled={submitPending}>
+                  {submitPending ? "Submitting..." : "Submit for review"}
+                </button>
+                <Message state={submitState} />
+              </form>
+            </div>
+          )}
         </div>
         <div className="workspace-hero-status">
           <span>Project progress</span>
@@ -224,7 +236,6 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
           </form> : <p className="workspace-message" role="status">
             Project settings are read-only while this project is {project.publication_state.replace("_", " ")}.
           </p>}
-          {(project.publication_state === "draft" || project.publication_state === "changes_requested") && <form action={submitAction} className="workspace-submit-review"><input type="hidden" name="project_id" value={project.id} /><button className="button button-secondary" disabled={submitPending}>{submitPending ? "Submitting..." : "Submit for review"}</button><Message state={submitState} /></form>}
           {isOwner && <div className="workspace-danger-action"><p className="muted">Deleting removes this project, requests, proofs, milestones, tasks, and project history permanently.</p><form action={deleteAction}><input type="hidden" name="project_id" value={project.id} /><button className="button button-secondary" type="submit" disabled={deletePending} onClick={(event) => { if (!confirm("Permanently delete this project and all requests, proofs, milestones, tasks, and history? This cannot be undone.")) event.preventDefault(); }}>{deletePending ? "Deleting..." : "Delete project permanently"}</button><Message state={deleteState} /></form></div>}
         </details>}
       </div>
