@@ -15,11 +15,23 @@ type ProjectRow = Pick<Tables<"projects">, "id" | "slug" | "title" | "category" 
 type MembershipRow = Pick<Tables<"project_members">, "project_id" | "profile_id" | "role" | "status" | "joined_at" | "submitted_at" | "reviewed_at">;
 
 export type CommunityProject = ProjectRow & { membership: MembershipRow | null; joinRequestStatus: string | null };
+type MemberExploreRelationship = Pick<MembershipRow, "role" | "status">;
 export type MemberExploreProject = Pick<ProjectRow, "id" | "title" | "category" | "description" | "technologies" | "build_stage" | "recruitment_mode" | "team_capacity"> & {
-  membership: MembershipRow | null;
+  membership: MemberExploreRelationship | null;
   joinRequestStatus: string | null;
 };
 export type MemberProjectsDashboard = { myProjects: CommunityProject[] };
+export type MemberProjectRequest = {
+  id: string;
+  contribution: string;
+  message: string;
+  requestedAt: string;
+  proofs: JoinRequestProof[];
+};
+export type MemberProjectExperience = Pick<ProjectRow, "id" | "title" | "category" | "description" | "technologies" | "build_stage" | "publication_state" | "recruitment_mode" | "team_capacity" | "repository_url" | "demo_url"> & {
+  membership: { role: string; status: string } | null;
+  request: MemberProjectRequest | null;
+};
 export type AdminProjectMember = MembershipRow & { fullName: string; handle: string };
 export type AdminProject = ProjectRow & { members: AdminProjectMember[] };
 export type ProjectWorkspace = ProjectRow & { members: AdminProjectMember[]; requests: Array<{ id: string; profileId: string; fullName: string; handle: string; contribution: string; message: string; status: string }>; reviews: Array<{ decision: string; feedback: string; createdAt: string }> };
@@ -44,15 +56,29 @@ export async function getMemberProjects(): Promise<CommunityProject[]> {
   const claims = await getAuthenticatedClaims();
   if (!claims?.sub) return [];
   const supabase = await createClient();
-  const [projects, memberships, joinRequests] = await Promise.all([
-    supabase.from("projects").select(PROJECT_FIELDS).order("updated_at", { ascending: false }),
-    supabase.from("project_members").select("project_id, profile_id, role, status, joined_at, submitted_at, reviewed_at").eq("profile_id", claims.sub),
-    supabase.from("project_join_requests").select("project_id, status").eq("profile_id", claims.sub).eq("status", "requested"),
-  ]);
-  if (projects.error || memberships.error || joinRequests.error) throw new Error("Unable to load projects.");
-  const byProject = new Map((memberships.data ?? []).map((membership) => [membership.project_id, membership as MembershipRow]));
-  const requestsByProject = new Map((joinRequests.data ?? []).map((request) => [request.project_id, request.status]));
-  return ((projects.data ?? []) as ProjectRow[]).map((project) => ({ ...project, membership: byProject.get(project.id) ?? null, joinRequestStatus: requestsByProject.get(project.id) ?? null }));
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("project_members")
+    .select("project_id, profile_id, role, status, joined_at, submitted_at, reviewed_at")
+    .eq("profile_id", claims.sub)
+    .in("status", ["active", "submitted", "completed"]);
+  if (membershipsError) throw new Error("Unable to load member projects.");
+
+  const projectIds = [...new Set((memberships ?? []).map((membership) => membership.project_id))];
+  if (projectIds.length === 0) return [];
+
+  const { data: projects, error: projectsError } = await supabase
+    .from("projects")
+    .select(PROJECT_FIELDS)
+    .in("id", projectIds)
+    .order("updated_at", { ascending: false });
+  if (projectsError) throw new Error("Unable to load member projects.");
+
+  const byProject = new Map((memberships ?? []).map((membership) => [membership.project_id, membership as MembershipRow]));
+  return ((projects ?? []) as ProjectRow[]).map((project) => ({
+    ...project,
+    membership: byProject.get(project.id) ?? null,
+    joinRequestStatus: null,
+  }));
 }
 
 export async function getMemberProjectWorkspace(projectId: string): Promise<ProjectWorkspace | null> {
@@ -171,11 +197,11 @@ export async function getMemberExploreProjects(): Promise<MemberExploreProject[]
   const supabase = await createClient();
   const [projects, memberships, joinRequests] = await Promise.all([
     supabase.from("projects").select("id, title, category, description, technologies, build_stage, recruitment_mode, team_capacity").eq("publication_state", "published").order("updated_at", { ascending: false }),
-    supabase.from("project_members").select("project_id, profile_id, role, status, joined_at, submitted_at, reviewed_at").eq("profile_id", claims.sub),
+    supabase.from("project_members").select("project_id, role, status").eq("profile_id", claims.sub),
     supabase.from("project_join_requests").select("project_id, status").eq("profile_id", claims.sub).eq("status", "requested"),
   ]);
   if (projects.error || memberships.error || joinRequests.error) throw new Error("Unable to load discoverable projects.");
-  const membershipByProject = new Map((memberships.data ?? []).map((membership) => [membership.project_id, membership as MembershipRow]));
+  const membershipByProject = new Map((memberships.data ?? []).map((membership) => [membership.project_id, { role: membership.role, status: membership.status } satisfies MemberExploreRelationship]));
   const requestByProject = new Map((joinRequests.data ?? []).map((request) => [request.project_id, request.status]));
   return (projects.data ?? []).map((project) => ({
     ...project,
@@ -187,7 +213,53 @@ export async function getMemberExploreProjects(): Promise<MemberExploreProject[]
 /** The member project dashboard deliberately excludes community discovery, which belongs on Explore. */
 export async function getMemberProjectsDashboard(): Promise<MemberProjectsDashboard> {
   const projects = await getMemberProjects();
-  return { myProjects: projects.filter((project) => project.membership !== null) };
+  return { myProjects: projects };
+}
+
+/** Reads only the project/detail relationship data needed before workspace authorization. */
+export async function getMemberProjectExperience(projectId: string): Promise<MemberProjectExperience | null> {
+  const claims = await getAuthenticatedClaims();
+  if (!claims?.sub) return null;
+  const supabase = await createClient();
+  const [projectResult, membershipResult, requestResult] = await Promise.all([
+    supabase.from("projects").select(PROJECT_FIELDS).eq("id", projectId).maybeSingle(),
+    supabase.from("project_members").select("role, status").eq("project_id", projectId).eq("profile_id", claims.sub).maybeSingle(),
+    supabase.from("project_join_requests").select("id, requested_contribution, message, requested_at").eq("project_id", projectId).eq("profile_id", claims.sub).eq("status", "requested").maybeSingle(),
+  ]);
+  if (projectResult.error || membershipResult.error || requestResult.error) {
+    throw new Error("Unable to load project details.");
+  }
+  if (!projectResult.data) return null;
+
+  let proofs: JoinRequestProof[] = [];
+  if (requestResult.data) {
+    const proofsResult = await supabase
+      .from("project_join_request_proofs")
+      .select("id, proof_type, title, description, url, created_at")
+      .eq("request_id", requestResult.data.id)
+      .order("created_at", { ascending: true });
+    if (proofsResult.error) throw new Error("Unable to load project details.");
+    proofs = (proofsResult.data ?? []).map((proof) => ({
+      id: proof.id,
+      proofType: proof.proof_type,
+      title: proof.title,
+      description: proof.description,
+      url: proof.url,
+      createdAt: proof.created_at,
+    }));
+  }
+
+  return {
+    ...(projectResult.data as ProjectRow),
+    membership: membershipResult.data ? { role: membershipResult.data.role, status: membershipResult.data.status } : null,
+    request: requestResult.data ? {
+      id: requestResult.data.id,
+      contribution: requestResult.data.requested_contribution,
+      message: requestResult.data.message,
+      requestedAt: requestResult.data.requested_at,
+      proofs,
+    } : null,
+  };
 }
 
 /** Reads the private V2.2 workspace. RLS remains the authorization authority. */

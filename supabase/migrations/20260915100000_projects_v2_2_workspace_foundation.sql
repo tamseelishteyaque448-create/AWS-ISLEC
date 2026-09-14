@@ -291,7 +291,7 @@ begin
     raise exception using errcode = '22023', message = 'Project workspace is read-only';
   end if;
 
-  select t.*, m.is_archived into v_task, v_milestone_archived
+  select t.* into v_task
   from public.project_tasks t
   join public.project_milestones m on m.id = t.milestone_id
   where t.id = p_task_id and t.project_id = p_project_id and m.project_id = p_project_id
@@ -299,6 +299,9 @@ begin
   if not found then
     raise exception using errcode = 'P0002', message = 'Task not found for project';
   end if;
+  select m.is_archived into v_milestone_archived
+  from public.project_milestones m
+  where m.id = v_task.milestone_id and m.project_id = p_project_id;
   if v_task.is_archived or v_milestone_archived then
     raise exception using errcode = '22023', message = 'Archived tasks or milestones cannot be changed';
   end if;
@@ -345,7 +348,7 @@ begin
     raise exception using errcode = '22023', message = 'Project workspace is read-only';
   end if;
 
-  select t.*, m.is_archived into v_task, v_milestone_archived
+  select t.* into v_task
   from public.project_tasks t
   join public.project_milestones m on m.id = t.milestone_id
   where t.id = p_task_id and t.project_id = p_project_id and m.project_id = p_project_id
@@ -353,6 +356,9 @@ begin
   if not found then
     raise exception using errcode = 'P0002', message = 'Task not found for project';
   end if;
+  select m.is_archived into v_milestone_archived
+  from public.project_milestones m
+  where m.id = v_task.milestone_id and m.project_id = p_project_id;
   if v_task.is_archived or v_milestone_archived then
     raise exception using errcode = '22023', message = 'Archived tasks or milestones cannot be assigned';
   end if;
@@ -413,7 +419,7 @@ begin
     raise exception using errcode = '22023', message = 'Project workspace is read-only';
   end if;
 
-  select t.*, m.is_archived into v_task, v_milestone_archived
+  select t.* into v_task
   from public.project_tasks t
   join public.project_milestones m on m.id = t.milestone_id
   where t.id = p_task_id and t.project_id = p_project_id and m.project_id = p_project_id
@@ -421,6 +427,9 @@ begin
   if not found then
     raise exception using errcode = 'P0002', message = 'Task not found for project';
   end if;
+  select m.is_archived into v_milestone_archived
+  from public.project_milestones m
+  where m.id = v_task.milestone_id and m.project_id = p_project_id;
   if v_task.is_archived then
     raise exception using errcode = '22023', message = 'Task is already archived';
   end if;

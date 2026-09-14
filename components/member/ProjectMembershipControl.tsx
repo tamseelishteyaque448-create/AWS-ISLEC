@@ -58,7 +58,7 @@ export function ProjectMembershipControl({
       ) : null}
       <button className="button" type="submit" disabled={pending}>
         {pending ? <LoaderCircle size={15} aria-hidden="true" /> : membershipStatus === "active" ? <Send size={15} aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
-        {membershipStatus === "active" ? "Submit work" : "Request access"}
+        {membershipStatus === "active" ? "Submit work" : "Request to Join"}
       </button>
       {state.message ? <p className={`event-registration-message ${state.status}`}>{state.message}</p> : null}
     </form>

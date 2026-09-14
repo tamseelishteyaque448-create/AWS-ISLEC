@@ -187,6 +187,19 @@ function PublicationReview({ project }: { project: AdminProject }) {
           Archive
         </button>
       ) : null}
+      {project.publication_state === "archived" ? (
+        <button
+          className="button button-secondary"
+          name="decision"
+          value="approved"
+          disabled={pending}
+          onClick={(event) => {
+            if (!confirm("Republish this archived project for members?")) event.preventDefault();
+          }}
+        >
+          Republish
+        </button>
+      ) : null}
       {state.message ? (
         <p className={`admin-event-message ${state.status}`}>{state.message}</p>
       ) : null}

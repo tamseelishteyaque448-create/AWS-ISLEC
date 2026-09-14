@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPublicProjectBySlug, getMemberProjects } from "@/lib/services/projects";
+import { getPublicProjectBySlug, getMemberExploreProjects } from "@/lib/services/projects";
 import { getAuthenticatedClaims } from "@/lib/auth/session";
 import { ProjectMembershipControl } from "@/components/member/ProjectMembershipControl";
 export default async function PublicProjectDetail({ params }: { params: Promise<{ slug: string }> }) {
@@ -12,8 +12,8 @@ export default async function PublicProjectDetail({ params }: { params: Promise<
   let membershipStatus = null;
   let joinRequestStatus = null;
   if (claims?.sub) {
-    // Get membership information for authenticated users
-    const memberProjects = await getMemberProjects().catch(() => []);
+    // Get the viewer relationship from the published discovery contract.
+    const memberProjects = await getMemberExploreProjects();
     const memberProject = memberProjects.find(p => p.id === project.id);
     if (memberProject) {
       membershipStatus = memberProject.membership?.status ?? null;

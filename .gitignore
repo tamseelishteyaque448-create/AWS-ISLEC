@@ -13,6 +13,8 @@ out/
 .vercel
 .env*
 !.env.example
+!.env.qa.local.example
 
 supabase/.temp/
 supabase/.branches/
+test-results/

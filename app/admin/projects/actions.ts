@@ -13,6 +13,19 @@ async function adminClient() {
   return { claims, supabase: await createClient() };
 }
 
+function projectMutationError(error: { code?: string; message?: string }, fallback: string): string {
+  if (error.code === "23505") return "A project with this title is already being created. Please try again.";
+  if (error.code === "42501") return "You are not authorized to perform this project action.";
+  if (error.code === "22023") return "Check the project fields and try again.";
+  if (error.code === "P0002") return "The project no longer exists. Refresh and try again.";
+
+  console.error("Project mutation failed", {
+    code: error.code,
+    message: error.message,
+  });
+  return fallback;
+}
+
 function revalidateProjects() {
   revalidatePath("/admin/projects");
   revalidatePath("/member/projects");
@@ -43,7 +56,7 @@ export async function createProject(
     p_team_capacity:    input.data.team_capacity,
   });
 
-  if (error) return { status: "error", message: "The project could not be created." };
+  if (error) return { status: "error", message: projectMutationError(error, "The project could not be created. Please try again.") };
   revalidateProjects();
   return { status: "success", message: "Draft project created with you as owner." };
 }
@@ -79,7 +92,7 @@ export async function updateProject(
     p_demo_url:        input.data.demo_url,
   });
 
-  if (error) return { status: "error", message: "The project could not be updated." };
+  if (error) return { status: "error", message: projectMutationError(error, "The project could not be updated. Please try again.") };
   revalidateProjects();
   return { status: "success", message: "Project updated." };
 }
@@ -120,7 +133,7 @@ export async function reviewProjectMember(
 // ---------------------------------------------------------------------------
 // reviewProjectPublication
 // Calls review_project_publication (admin-only, SECURITY DEFINER).
-// Decisions: approved | changes_requested | archived
+// Decisions: approved | changes_requested | archived. Approved also republishes archives.
 // ---------------------------------------------------------------------------
 export async function reviewProjectPublication(
   _: ProjectFormState,

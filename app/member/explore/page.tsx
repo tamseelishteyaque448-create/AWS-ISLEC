@@ -1,8 +1,9 @@
 import { PageIntro } from "@/components/cards/PageIntro";
 import { Topline } from "@/components/ui/Topline";
-import { getMemberProjects } from "@/lib/services/projects";
+import { ProjectDiscovery } from "@/components/member/ProjectDiscovery";
+import { getMemberExploreProjects } from "@/lib/services/projects";
 
 export default async function Explore() {
-  const projects = await getMemberProjects().catch(() => null);
-  return <><Topline section="Explore the community" /><PageIntro kicker="People / projects / ideas" title="See what is being built." description="Follow the threads, projects, and curious experiments moving through the community right now." />{projects === null ? <section className="admin-member-error"><h2>Community projects are unavailable.</h2><p>Please refresh the page and try again.</p></section> : projects.length === 0 ? <section className="admin-member-empty"><h2>No projects are available yet.</h2><p>Check back soon for the next community build.</p></section> : <div className="list">{projects.map((project) => <article className="list-item" key={project.id}><div><strong>{project.title}</strong><div className="muted">{project.category} / {project.build_stage}</div></div><span className="tag">{project.publication_state}</span></article>)}</div>}</>;
+  const projects = await getMemberExploreProjects().catch(() => null);
+  return <><Topline section="Explore the community" /><PageIntro kicker="Project discovery" title="Find something worth building with." description="Explore published community projects, learn what is being built, and find a team or idea that fits your next step." />{projects === null ? <section className="admin-member-error"><h2>Project discovery is temporarily unavailable.</h2><p>Please try again.</p></section> : <ProjectDiscovery projects={projects} />}</>;
 }

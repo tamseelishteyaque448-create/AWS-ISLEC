@@ -18,7 +18,7 @@ const initial: ProjectMemberState = { status: "idle" };
 
 export function JoinRequestProofForm({ requestId, proofs }: { requestId: string; proofs: JoinRequestProof[] }) {
   const [addState, addAction, addPending] = useActionState(addJoinRequestProof, initial);
-  const [removeState, removeAction] = useActionState(removeJoinRequestProof, initial);
+  const [removeState, removeAction, removePending] = useActionState(removeJoinRequestProof, initial);
 
   return (
     <div className="proof-section">
@@ -36,7 +36,7 @@ export function JoinRequestProofForm({ requestId, proofs }: { requestId: string;
               </div>
               <form action={removeAction}>
                 <input type="hidden" name="proof_id" value={proof.id} />
-                <button className="button button-secondary" type="submit" aria-label={`Remove proof: ${proof.title}`}>
+                <button className="button button-secondary" type="submit" disabled={removePending} aria-label={`Remove proof: ${proof.title}`}>
                   <Trash2 size={14} aria-hidden="true" />
                 </button>
               </form>
