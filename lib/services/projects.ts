@@ -15,6 +15,11 @@ type ProjectRow = Pick<Tables<"projects">, "id" | "slug" | "title" | "category" 
 type MembershipRow = Pick<Tables<"project_members">, "project_id" | "profile_id" | "role" | "status" | "joined_at" | "submitted_at" | "reviewed_at">;
 
 export type CommunityProject = ProjectRow & { membership: MembershipRow | null; joinRequestStatus: string | null };
+export type MemberExploreProject = Pick<ProjectRow, "id" | "title" | "category" | "description" | "technologies" | "build_stage" | "recruitment_mode" | "team_capacity"> & {
+  membership: MembershipRow | null;
+  joinRequestStatus: string | null;
+};
+export type MemberProjectsDashboard = { myProjects: CommunityProject[] };
 export type AdminProjectMember = MembershipRow & { fullName: string; handle: string };
 export type AdminProject = ProjectRow & { members: AdminProjectMember[] };
 export type ProjectWorkspace = ProjectRow & { members: AdminProjectMember[]; requests: Array<{ id: string; profileId: string; fullName: string; handle: string; contribution: string; message: string; status: string }>; reviews: Array<{ decision: string; feedback: string; createdAt: string }> };
@@ -157,6 +162,32 @@ const ACTIVE_WORKSPACE_MEMBER_STATUSES = new Set(["active", "submitted", "comple
 
 function sortByWorkspaceOrder<T extends { sort_order: number; id: string }>(left: T, right: T) {
   return left.sort_order - right.sort_order || left.id.localeCompare(right.id);
+}
+
+/** Published, member-visible projects only; discovery must not inherit workspace query semantics. */
+export async function getMemberExploreProjects(): Promise<MemberExploreProject[]> {
+  const claims = await getAuthenticatedClaims();
+  if (!claims?.sub) return [];
+  const supabase = await createClient();
+  const [projects, memberships, joinRequests] = await Promise.all([
+    supabase.from("projects").select("id, title, category, description, technologies, build_stage, recruitment_mode, team_capacity").eq("publication_state", "published").order("updated_at", { ascending: false }),
+    supabase.from("project_members").select("project_id, profile_id, role, status, joined_at, submitted_at, reviewed_at").eq("profile_id", claims.sub),
+    supabase.from("project_join_requests").select("project_id, status").eq("profile_id", claims.sub).eq("status", "requested"),
+  ]);
+  if (projects.error || memberships.error || joinRequests.error) throw new Error("Unable to load discoverable projects.");
+  const membershipByProject = new Map((memberships.data ?? []).map((membership) => [membership.project_id, membership as MembershipRow]));
+  const requestByProject = new Map((joinRequests.data ?? []).map((request) => [request.project_id, request.status]));
+  return (projects.data ?? []).map((project) => ({
+    ...project,
+    membership: membershipByProject.get(project.id) ?? null,
+    joinRequestStatus: requestByProject.get(project.id) ?? null,
+  })) as MemberExploreProject[];
+}
+
+/** The member project dashboard deliberately excludes community discovery, which belongs on Explore. */
+export async function getMemberProjectsDashboard(): Promise<MemberProjectsDashboard> {
+  const projects = await getMemberProjects();
+  return { myProjects: projects.filter((project) => project.membership !== null) };
 }
 
 /** Reads the private V2.2 workspace. RLS remains the authorization authority. */

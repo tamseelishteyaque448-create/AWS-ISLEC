@@ -63,6 +63,13 @@ export type LearningPath = {
   challenges: LearningChallenge[];
 };
 
+export type MemberLearningPath = LearningPath & {
+  challengeCount: number;
+  completedChallengeCount: number;
+  progressPercentage: number;
+  nextChallenge: { slug: string; title: string } | null;
+};
+
 export type DashboardChallenge = LearningChallenge & {
   progress: number;
   status: string;
@@ -347,6 +354,11 @@ export const supabaseRepository = {
     return (data as ActivityRow[]).map(mapDashboardActivity);
   },
 
+  /** Private, chronological activity history for the current member. */
+  async getMemberActivities(): Promise<Activity[]> {
+    return this.getActivities();
+  },
+
   async getEarnedBadges(): Promise<MemberBadge[]> {
     const claims = await getAuthenticatedClaims();
 
@@ -482,5 +494,31 @@ export const supabaseRepository = {
 
   async getLearningCatalogue() {
     return this.getPublicLearningCatalogue();
+  },
+
+  /** Groups published curriculum by path and joins only the current member's authoritative progress rows. */
+  async getMemberLearningPaths(): Promise<MemberLearningPath[]> {
+    const claims = await getAuthenticatedClaims();
+    if (!claims?.sub) return [];
+    const supabase = await createClient();
+    const [pathsResult, challengesResult, progressResult] = await Promise.all([
+      supabase.from("learning_paths").select("id, slug, title, description, level, estimated_minutes, points, sort_order").eq("is_published", true).order("sort_order", { ascending: true }),
+      supabase.from("challenges").select("id, learning_path_id, slug, title, detail, level, points, sort_order").eq("is_published", true).order("sort_order", { ascending: true }),
+      supabase.from("user_challenge_progress").select("challenge_id, progress, status").eq("profile_id", claims.sub),
+    ]);
+    if (pathsResult.error || challengesResult.error || progressResult.error) throw new LearningCatalogueError();
+    const progressByChallenge = new Map((progressResult.data as ProgressRow[]).map((progress) => [progress.challenge_id, progress]));
+    return pathsResult.data.map((path) => {
+      const learningPath = mapLearningPath(path, challengesResult.data);
+      const completedChallengeCount = learningPath.challenges.filter((challenge) => progressByChallenge.get(challenge.id)?.status === "completed").length;
+      const nextChallenge = learningPath.challenges.find((challenge) => progressByChallenge.get(challenge.id)?.status !== "completed") ?? null;
+      return {
+        ...learningPath,
+        challengeCount: learningPath.challenges.length,
+        completedChallengeCount,
+        progressPercentage: learningPath.challenges.length === 0 ? 0 : Math.floor((completedChallengeCount * 100) / learningPath.challenges.length),
+        nextChallenge: nextChallenge ? { slug: nextChallenge.slug, title: nextChallenge.title } : null,
+      };
+    });
   },
 };
