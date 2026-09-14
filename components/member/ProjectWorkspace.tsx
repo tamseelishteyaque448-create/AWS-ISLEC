@@ -206,7 +206,7 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
         {project.reviews.filter((review) => review.decision === "changes_requested" && review.feedback).map((review) => <div className="workspace-review" key={review.createdAt}><strong>Changes requested</strong><p>{review.feedback}</p></div>)}
         {isOwner && <details className="workspace-settings">
           <summary>Project settings</summary>
-          <form action={editAction} className="workspace-form workspace-settings-form">
+          {writable ? <form action={editAction} className="workspace-form workspace-settings-form">
             <input type="hidden" name="project_id" value={project.id} />
             <label>Title<input name="title" required maxLength={160} defaultValue={project.title} /></label>
             <label>Category<input name="category" required maxLength={80} defaultValue={project.category} /></label>
@@ -219,7 +219,9 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
             <label className="workspace-form-wide">Description<textarea name="description" maxLength={2000} defaultValue={project.description} rows={4} /></label>
             <button className="button" type="submit" disabled={editPending}>{editPending ? "Saving..." : "Save project"}</button>
             <Message state={editState} />
-          </form>
+          </form> : <p className="workspace-message" role="status">
+            Project settings are read-only while this project is {project.publication_state.replace("_", " ")}.
+          </p>}
           {(project.publication_state === "draft" || project.publication_state === "changes_requested") && <form action={submitAction} className="workspace-submit-review"><input type="hidden" name="project_id" value={project.id} /><button className="button button-secondary" disabled={submitPending}>{submitPending ? "Submitting..." : "Submit for review"}</button><Message state={submitState} /></form>}
         </details>}
       </div>
