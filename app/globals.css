@@ -374,28 +374,26 @@ select:focus {
   min-height: 82px;
   border-bottom-color: rgb(255 255 255 / 10%);
 }
-.sidebar-brand {
-  display: inline-flex;
+.logo {
+  display: flex;
+  width: 132px;
+  height: 66px;
   align-items: center;
-  gap: 10px;
-  color: var(--color-white);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -.045em;
+  justify-content: center;
+  margin: 0 10px 42px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
 }
-.sidebar-brand-mark {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--color-orange);
-  color: var(--color-navy);
-  font-size: 21px;
-  line-height: 1;
+.logo-aws-image {
+  display: block;
+  width: 116px;
+  height: 58px;
+  padding: 5px 7px;
+  object-fit: contain;
+  filter: none;
+  opacity: 1;
 }
-.sidebar-brand-name { white-space: nowrap; }
 .nav-group { margin-top: var(--space-6); }
 .nav-label {
   padding: 0 18px 9px;
