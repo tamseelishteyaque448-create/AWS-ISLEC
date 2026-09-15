@@ -22,6 +22,12 @@ import type { ProjectWorkspaceV2 as Workspace, WorkspaceJoinRequest, WorkspaceMi
 
 const initial: ProjectMemberState = { status: "idle" };
 const STATUS_LABELS: Record<string, string> = { todo: "To do", in_progress: "In progress", blocked: "Blocked", completed: "Completed" };
+const BUILD_STAGE_LABELS: Record<string, string> = { idea: "Idea", building: "Building", prototype: "Prototype", shipped: "Shipped" };
+const RECRUITMENT_LABELS: Record<string, string> = { open: "Recruiting", invite_only: "Invite only", not_recruiting: "Not recruiting" };
+
+function projectMonogram(title: string) {
+  return title.split(/\s+/).map((word) => word[0]).join("").slice(0, 2).toUpperCase();
+}
 
 function Message({ state }: { state: ProjectMemberState }) {
   return state.message ? <p className={`workspace-message ${state.status}`} role={state.status === "error" ? "alert" : "status"}>{state.message}</p> : null;
@@ -174,9 +180,19 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
     <section className="project-workspace">
       <header className="workspace-hero">
         <div>
-          <p className="eyebrow">{project.category} / {project.publication_state.replace("_", " ")}</p>
-          <h1>{project.title}</h1>
+          <div className="workspace-identity">
+            <span className="workspace-monogram" aria-hidden="true">{projectMonogram(project.title)}</span>
+            <div><p className="eyebrow">{project.category} <span aria-hidden="true">·</span> {project.publication_state.replace("_", " ")}</p><h1>{project.title}</h1></div>
+          </div>
           <p>{project.description}</p>
+          <div className="workspace-hero-meta">
+            <span>{BUILD_STAGE_LABELS[project.build_stage]}</span>
+            <span>{RECRUITMENT_LABELS[project.recruitment_mode]}</span>
+            <span>{project.members.length} {project.members.length === 1 ? "active member" : "active members"}</span>
+            {mine?.role ? <span>Your role: {mine.role}</span> : null}
+          </div>
+          {project.technologies.length > 0 && <div className="workspace-hero-tech" aria-label="Technologies">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>}
+          {(project.repository_url || project.demo_url) && <div className="workspace-hero-links">{project.repository_url ? <a href={project.repository_url} target="_blank" rel="noopener noreferrer">Repository <span aria-hidden="true">↗</span></a> : null}{project.demo_url ? <a href={project.demo_url} target="_blank" rel="noopener noreferrer">Live demo <span aria-hidden="true">↗</span></a> : null}</div>}
           {isOwner && (project.publication_state === "draft" || project.publication_state === "changes_requested") && (
             <div className="workspace-publish-prompt">
               <p>{project.publication_state === "draft" ? "Your project is private until it is reviewed and published." : "Make the requested changes, then submit this project for review again."}</p>
@@ -204,20 +220,20 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
 
       <div id={`${tabPrefix}-overview-panel`} role="tabpanel" aria-labelledby={`${tabPrefix}-overview-tab`} hidden={activeTab !== "overview"} className="workspace-panel">
         <div className="workspace-overview-summary">
-          <article><span className="eyebrow">Stage</span><strong>{project.build_stage}</strong><small>Current build phase</small></article>
+          <article><span className="eyebrow">Build stage</span><strong>{BUILD_STAGE_LABELS[project.build_stage]}</strong><small>Current build phase</small></article>
           <article><span className="eyebrow">Team</span><strong>{project.members.length}</strong><small>{project.members.length === 1 ? "Active member" : "Active members"}</small></article>
-          <article><span className="eyebrow">Milestones</span><strong>{visibleMilestones.length}</strong><small>{visibleMilestones.length === 1 ? "Current milestone" : "Current milestones"}</small></article>
+          <article><span className="eyebrow">Milestones</span><strong>{visibleMilestones.length}</strong><small>{visibleMilestones.length === 1 ? "Active milestone" : "Active milestones"}</small></article>
           <article><span className="eyebrow">Tasks</span><strong>{project.progress.totalActiveTasks}</strong><small>{project.progress.completedActiveTasks} completed</small></article>
         </div>
         <div className="workspace-overview-grid">
           <article className="workspace-card">
-            <div className="workspace-card-heading"><span className="eyebrow">What we are building</span><span className={`workspace-state ${project.publication_state}`}>{project.publication_state.replace("_", " ")}</span></div>
+            <div className="workspace-card-heading"><span className="eyebrow">Project overview</span><span className={`workspace-state ${project.publication_state}`}>{project.publication_state.replace("_", " ")}</span></div>
             <h2>{project.title}</h2>
             <p>{project.description}</p>
             {project.technologies.length > 0 && <div className="project-tech-list">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>}
           </article>
           <article className="workspace-card workspace-next-step">
-            <span className="eyebrow">What needs to happen next</span>
+            <span className="eyebrow">Next up</span>
             <h2>{project.displayCurrentMilestone?.title ?? "All current milestones are complete"}</h2>
             <p>{project.displayCurrentMilestone ? `${project.displayCurrentMilestone.completedActiveTaskCount} of ${project.displayCurrentMilestone.activeTaskCount} tasks complete.` : "Create a new milestone when the team is ready for the next piece of work."}</p>
             <button className="workspace-text-button" type="button" onClick={() => setActiveTab("work")}>Open work board <ChevronRight size={15} /></button>

@@ -7,7 +7,7 @@ const initial: ProjectMemberState = { status: "idle" };
 
 export function ProjectCreateForm() {
   const [state, action, pending] = useActionState(createMemberProject, initial);
-  return <details className="admin-event-create"><summary>Create a project</summary><form action={action} className="admin-event-fields">
+  return <details className="project-create-panel"><summary><span><span className="eyebrow">Build something new</span><strong>Have an idea worth building?</strong></span><span className="button">+ Create project</span></summary><form action={action} className="admin-event-fields">
     <label>Title<input name="title" required maxLength={160} /></label>
     <label>Category<input name="category" required maxLength={80} placeholder="Serverless" /></label>
     <label>Recruitment<select name="recruitment_mode" defaultValue="open"><option value="open">Open</option><option value="invite_only">Invite only</option><option value="not_recruiting">Not recruiting</option></select></label>
