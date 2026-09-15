@@ -28,7 +28,15 @@ export default async function Challenges() {
 
   return <>
     <Topline section="Challenges / make it real" />
-    <PageIntro kicker="Practical missions" title="Build proof, one challenge at a time." description="Turn cloud concepts into finished work with focused challenges from the AWS ISLEC learning paths." />
+    <div className="challenge-hero">
+      <PageIntro kicker="Practical missions" title="Build proof, one challenge at a time." description="Turn cloud concepts into finished work with focused challenges from the AWS ISLEC learning paths." />
+      <aside className="challenge-hero-panel">
+        <span className="eyebrow">Your mission board</span>
+        <strong>{completedCount === challenges.length ? "All missions solved" : `${challenges.length - completedCount} missions in reach`}</strong>
+        <div className="challenge-hero-progress"><span style={{ width: `${challenges.length ? (completedCount / challenges.length) * 100 : 0}%` }} /></div>
+        <small>{completedCount} of {challenges.length} challenges completed</small>
+      </aside>
+    </div>
     {challenges.length === 0 ? (
       <ChallengeListState>
         <h2>No challenges are available yet.</h2>
@@ -36,7 +44,7 @@ export default async function Challenges() {
       </ChallengeListState>
     ) : (
       <>
-        <div className="challenge-summary panel"><div><strong>{challenges.length}</strong><span>Total challenges</span></div><div><strong>{completedCount}</strong><span>Solved</span></div><div><strong>{challenges.length - completedCount}</strong><span>Remaining</span></div><div><strong>{earnedPoints}</strong><span>Challenge points earned</span></div></div>
+        <div className="challenge-summary"><div><span className="eyebrow">Missions</span><strong>{challenges.length}</strong><span>Total challenges</span></div><div><span className="eyebrow">Progress</span><strong>{completedCount}</strong><span>Solved</span></div><div><span className="eyebrow">Next up</span><strong>{challenges.length - completedCount}</strong><span>Remaining</span></div><div className="challenge-summary-points"><span className="eyebrow">Momentum</span><strong>{earnedPoints}</strong><span>Points earned</span></div></div>
         <ChallengeCatalogue challenges={challenges} />
       </>
     )}

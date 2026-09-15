@@ -20,8 +20,8 @@ export function ChallengeCatalogue({ challenges }: { challenges: MemberChallenge
       {filters.map((item) => <button className={filter === item ? "active" : ""} key={item} onClick={() => setFilter(item)} type="button">{item[0].toUpperCase() + item.slice(1)}</button>)}
     </div>
     {visibleChallenges.length === 0 ? <div className="panel"><h2>No {filter === "all" ? "" : `${filter} `}challenges found.</h2><p className="muted">Try another filter to see available missions.</p></div> : <div className="grid">
-      {visibleChallenges.map((challenge) => <article className="panel challenge-card" key={challenge.id}>
-        <div className="challenge-card-top"><span className={`tag difficulty-${challenge.level}`}>{challenge.level}</span><span className="eyebrow">{challenge.status === "completed" ? "Solved" : "Ready"}</span></div>
+      {visibleChallenges.map((challenge, index) => <article className={`panel challenge-card ${challenge.status === "completed" ? "is-completed" : ""}`} key={challenge.id}>
+        <div className="challenge-card-top"><span className="challenge-number">{String(index + 1).padStart(2, "0")}</span><span className={`tag difficulty-${challenge.level}`}>{challenge.level}</span><span className={`challenge-status ${challenge.status === "completed" ? "completed" : "ready"}`}>{challenge.status === "completed" ? "Completed" : "Ready"}</span></div>
         <h2>{challenge.title}</h2><p className="muted">{challenge.detail}</p>
         <div className="challenge-card-meta"><span>{challenge.category}</span><span>{challenge.estimatedMinutes} min</span><strong>+{challenge.points} pts</strong></div>
         <Link className="section-action" href={`/member/challenges/${challenge.slug}`}>{challenge.status === "completed" ? "Review mission" : "Open mission"} →</Link>
