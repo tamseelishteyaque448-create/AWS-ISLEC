@@ -516,16 +516,44 @@ details > summary:hover { color: var(--color-orange); }
 }
 
 @media (max-width: 680px) {
+  .shell { display: block; }
+  .sidebar {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    padding: 12px 14px 10px;
+    border-right: 0;
+    border-bottom: 1px solid rgb(255 255 255 / 10%);
+  }
   .logo {
-    width: 42px;
-    height: 42px;
-    margin-bottom: 28px;
-    border-radius: 9px;
+    width: 72px;
+    height: 38px;
+    margin: 0 0 12px;
+    border-radius: 7px;
   }
   .logo-aws-image {
     width: 100%;
     height: 100%;
-    padding: 4px;
+    padding: 3px 5px;
+  }
+  .nav-group { display: contents; }
+  .nav-group + .nav-group { margin-top: 0; }
+  .nav-label,
+  .sidebar-footer { display: none; }
+  .nav {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a {
+    flex: 0 0 auto;
+    min-height: 36px;
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 12px;
   }
   .public-header {
     width: min(100% - 32px, var(--content-readable));
