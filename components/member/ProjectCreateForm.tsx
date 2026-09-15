@@ -14,6 +14,6 @@ export function ProjectCreateForm() {
     <label>Team capacity (optional)<input name="team_capacity" type="number" min="1" max="100" /></label>
     <label className="admin-event-field-wide">Technologies<input name="technologies" maxLength={720} placeholder="Lambda, DynamoDB, Next.js" /></label>
     <label className="admin-event-field-wide">Description<textarea name="description" maxLength={2000} /></label>
-    <div className="admin-event-actions"><button className="button" disabled={pending}>{pending ? "Creating…" : "Create draft"}</button>{state.message ? <p className={`admin-event-message ${state.status}`}>{state.message}</p> : null}</div>
+    <div className="admin-event-actions"><button className="button" disabled={pending}>{pending ? "Submitting…" : "Create and submit for review"}</button>{state.message ? <p className={`admin-event-message ${state.status}`}>{state.message}</p> : null}</div>
   </form></details>;
 }

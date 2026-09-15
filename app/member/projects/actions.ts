@@ -44,7 +44,16 @@ export async function createMemberProject(_: ProjectMemberState, formData: FormD
     console.error("Project creation returned an invalid project id");
     return { status: "error", message: "Project creation did not complete. Please try again." };
   }
+  const { error: submissionError } = await supabase.rpc("submit_project_for_review", { p_project_id: projectId });
+  if (submissionError) {
+    console.error("Project review submission failed after creation", {
+      code: submissionError.code,
+      message: submissionError.message,
+    });
+    return { status: "error", message: "Project was created, but could not be submitted for admin review. Open it from My Projects and submit it again." };
+  }
   revalidatePath("/member/projects"); revalidatePath("/member/explore"); revalidatePath("/admin/projects");
+  revalidatePath("/admin/explore");
   redirect(`/member/projects/${projectId}`);
 }
 export async function requestProjectJoin(_: ProjectMemberState, formData: FormData): Promise<ProjectMemberState> {

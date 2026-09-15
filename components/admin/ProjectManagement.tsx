@@ -266,7 +266,7 @@ export function ProjectManagement({ projects }: { projects: AdminProject[] }) {
       </div>
       <Form />
       {projects.map((project) => (
-        <article className="admin-event-row" key={project.id}>
+        <article className="admin-event-row" id={`project-${project.id}`} key={project.id}>
           <div className="admin-event-main">
             <div>
               <span className="tag">{project.category}</span>

@@ -28,7 +28,9 @@ function projectMutationError(error: { code?: string; message?: string }, fallba
 
 function revalidateProjects() {
   revalidatePath("/admin/projects");
+  revalidatePath("/admin/explore");
   revalidatePath("/member/projects");
+  revalidatePath("/member/explore");
   revalidatePath("/projects");
   revalidatePath("/explore");
 }
