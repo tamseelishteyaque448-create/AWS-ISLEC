@@ -374,7 +374,28 @@ select:focus {
   min-height: 82px;
   border-bottom-color: rgb(255 255 255 / 10%);
 }
-.logo-aws-image { filter: brightness(0) invert(1); opacity: .92; }
+.sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-white);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.045em;
+}
+.sidebar-brand-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--color-orange);
+  color: var(--color-navy);
+  font-size: 21px;
+  line-height: 1;
+}
+.sidebar-brand-name { white-space: nowrap; }
 .nav-group { margin-top: var(--space-6); }
 .nav-label {
   padding: 0 18px 9px;
