@@ -11,7 +11,7 @@ const links = [
 
 const adminLinks = [
   { label: "Admin workspace", items: [["/admin", "Overview", Home]] },
-  { label: "Manage", items: [["/admin/members", "Members", UsersRound], ["/admin/events", "Events", CalendarDays], ["/admin/learning", "Learning", Rocket], ["/admin/challenges", "Challenges", Target], ["/admin/projects", "Projects", FolderKanban]] },
+  { label: "Manage", items: [["/admin/members", "Members", UsersRound], ["/admin/events", "Events", CalendarDays], ["/admin/learning", "Learning", Rocket], ["/admin/challenges", "Challenges", Target], ["/admin/projects", "Projects", FolderKanban], ["/admin/explore", "Explore", Compass]] },
   { label: "Community", items: [["/admin/achievements", "Achievements", Medal], ["/admin/leaderboard", "Leaderboard", Trophy], ["/admin/activities", "Activities", Activity]] },
   { label: "Insights", items: [["/admin/analytics", "Analytics", BarChart3], ["/admin/settings", "Settings", Settings]] },
 ] as const;

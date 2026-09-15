@@ -13,7 +13,9 @@ export async function GET(request: NextRequest) {
 
     if (!error) {
       try {
-        return NextResponse.redirect(new URL(await getWorkspaceDestination(supabase), request.url));
+        const workspace = await getWorkspaceDestination(supabase);
+        const destination = next === workspace || next.startsWith(`${workspace}/`) ? next : workspace;
+        return NextResponse.redirect(new URL(destination, request.url));
       } catch {
         // Fall through to the existing safe callback-error response.
       }

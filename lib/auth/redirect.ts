@@ -1,7 +1,7 @@
 const fallbackDestination = "/member";
 const localOrigin = "http://localhost";
 
-/** Returns a safe member-only redirect destination. */
+/** Returns a safe local workspace redirect destination. */
 export function getSafeNext(next: string | null | undefined) {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
     return fallbackDestination;
@@ -12,7 +12,12 @@ export function getSafeNext(next: string | null | undefined) {
 
     if (
       destination.origin !== localOrigin ||
-      (destination.pathname !== "/member" && !destination.pathname.startsWith("/member/"))
+      !(
+        destination.pathname === "/member" ||
+        destination.pathname.startsWith("/member/") ||
+        destination.pathname === "/admin" ||
+        destination.pathname.startsWith("/admin/")
+      )
     ) {
       return fallbackDestination;
     }
