@@ -942,12 +942,109 @@ details > summary:hover { color: var(--color-orange); }
 .workspace-overview-summary article { box-shadow: var(--shadow-sm); }
 .workspace-card, .workspace-milestone, .workspace-settings, .workspace-requests, .workspace-my-request { box-shadow: var(--shadow-sm); }
 
+/* Member community calendar */
+.member-events-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .52fr);
+  gap: 36px;
+  align-items: end;
+  margin-bottom: 24px;
+  padding: 10px 0 28px;
+  border-bottom: 1px solid var(--color-border);
+}
+.member-events-hero h1 {
+  margin: 12px 0 14px;
+  font-size: clamp(44px, 6vw, 72px);
+  line-height: .96;
+}
+.member-events-hero p { max-width: 570px; margin: 0; color: var(--color-slate); font-size: 16px; line-height: 1.6; }
+.member-events-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-border);
+}
+.member-events-metrics > div { display: grid; gap: 5px; min-height: 105px; align-content: center; padding: 16px; background: var(--color-white); }
+.member-events-metrics strong { color: var(--color-navy); font-size: 30px; line-height: 1; letter-spacing: -.07em; }
+.member-events-metrics span { color: var(--color-slate); font-size: 11px; }
+.member-events-feed { display: grid; gap: 14px; }
+.member-events-feed-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.member-events-feed-heading h2 { margin: 7px 0 0; font-size: 25px; letter-spacing: -.055em; }
+.member-events-feed-heading > span { color: var(--color-slate); font-size: 12px; }
+.member-events-list { display: grid; gap: 12px; }
+.member-events-list .list-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--ease-standard), box-shadow var(--ease-standard), transform var(--ease-standard);
+}
+.member-events-list .list-item:first-child { border-top: 1px solid var(--color-border); }
+.member-events-list .list-item:hover { border-color: #b7cce0; box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.member-event-date {
+  display: grid;
+  width: 78px;
+  min-height: 92px;
+  place-content: center;
+  justify-items: center;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-blue, #2563eb);
+  font: 10px var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.member-event-date strong { margin: 3px 0 2px; color: var(--color-navy); font-size: 34px; line-height: .9; letter-spacing: -.08em; }
+.member-event-copy { min-width: 0; }
+.member-event-labels { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-bottom: 9px; }
+.member-event-labels .tag { padding: 5px 7px; background: var(--color-cloud); color: var(--color-slate-dark); }
+.member-event-status, .member-event-registered { padding: 5px 7px; border-radius: 999px; font: 9px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.member-event-status.upcoming { background: var(--color-blue-soft, #eff6ff); color: #2563eb; }
+.member-event-status.past { background: #eef1f5; color: var(--color-slate); }
+.member-event-status.cancelled { background: #fff1f2; color: #be123c; }
+.member-event-registered { background: var(--color-success-soft); color: #047857; }
+.member-event-copy h3 { margin: 0 0 7px; color: var(--color-navy); font-size: 23px; letter-spacing: -.05em; }
+.member-event-copy h3 a:hover { color: #2166a5; }
+.member-event-copy .muted { max-width: 620px; margin: 0 0 13px; }
+.member-event-meta { display: flex; flex-wrap: wrap; gap: 12px 18px; color: var(--color-slate); font-size: 11px; }
+.member-event-meta span { display: inline-flex; gap: 5px; align-items: center; }
+.member-event-meta svg { color: #2166a5; }
+.member-event-actions { display: grid; justify-items: end; gap: 12px; min-width: 148px; }
+.member-event-actions form { width: 100%; }
+.member-event-actions form .button { width: 100%; }
+.member-event-details { display: inline-flex; gap: 7px; align-items: center; color: var(--color-navy); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.member-event-details:hover { color: #2166a5; }
+.member-events-empty { display: flex; gap: 18px; align-items: flex-start; padding: 28px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-white); color: #2166a5; }
+.member-events-empty h2 { margin: 7px 0; color: var(--color-navy); font-size: 25px; }
+.member-events-empty p { margin: 0; color: var(--color-slate); }
+
 @media (max-width: 900px) {
   .project-studio-hero { grid-template-columns: 1fr; gap: 24px; }
   .project-studio-grid { grid-template-columns: 1fr; }
+  .member-events-hero { grid-template-columns: 1fr; gap: 24px; }
 }
 @media (max-width: 680px) {
-  .project-studio-hero { padding-top: 0; }
+  .project-studio-hero { padding-top: 0;     .member-events-hero { padding-top: 0; }
+    .member-events-hero h1 { font-size: clamp(44px, 13vw, 62px); }
+    .member-events-metrics > div { min-height: 92px; padding: 13px; }
+    .member-events-metrics strong { font-size: 25px; }
+    .member-events-feed-heading { align-items: flex-start; flex-direction: column; }
+    .member-events-list .list-item { grid-template-columns: 58px minmax(0, 1fr); gap: 14px; padding: 16px; }
+    .member-event-date { width: 58px; min-height: 78px; }
+    .member-event-date strong { font-size: 29px; }
+    .member-event-actions { grid-column: 2; justify-items: start; min-width: 0; }
+    .member-event-actions form { width: auto; }
+    .member-event-actions form .button { width: auto; }
+    .member-event-details { font-size: 12px; }
+  }
   .project-studio-hero h1 { font-size: clamp(44px, 13vw, 62px); }
   .project-studio-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-studio-metrics > div { min-height: 98px; padding: 14px; }
