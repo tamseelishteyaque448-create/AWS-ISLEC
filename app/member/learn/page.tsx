@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageIntro } from "@/components/cards/PageIntro";
 import { Topline } from "@/components/ui/Topline";
 import { supabaseRepository } from "@/lib/services";
@@ -36,10 +37,12 @@ export default async function Learn() {
       <div className="grid">
         {challenges.map((challenge) => (
           <article className="panel" key={challenge.id}>
-            <span className="tag">{challenge.level}</span>
-            <h2 style={{ marginTop: 18 }}>{challenge.title}</h2>
-            <p className="muted">{challenge.detail}</p>
-            <div className="eyebrow" style={{ marginTop: 30 }}>+{challenge.points} pts</div>
+            <Link href={`/member/challenges/${challenge.slug}`}>
+              <span className="tag">{challenge.level}</span>
+              <h2 style={{ marginTop: 18 }}>{challenge.title}</h2>
+              <p className="muted">{challenge.detail}</p>
+              <div className="eyebrow" style={{ marginTop: 30 }}>+{challenge.points} pts</div>
+            </Link>
           </article>
         ))}
       </div>
