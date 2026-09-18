@@ -51,7 +51,15 @@ export function AuthForm() {
       }
 
       setSuccess("Welcome back. Opening your workspace…");
-      if (destination !== "/admin" && destination !== "/member") {
+      if (typeof destination !== "string") {
+        throw new Error("The sign-in service returned an invalid workspace.");
+      }
+      const isValidDestination =
+        destination === "/member" ||
+        destination.startsWith("/member/") ||
+        destination === "/admin" ||
+        destination.startsWith("/admin/");
+      if (!isValidDestination) {
         throw new Error("The sign-in service returned an invalid workspace.");
       }
 
