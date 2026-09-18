@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      return respond({ error: error.message }, error.status ?? 400);
+      return respond({ error: "Unable to sign in with those credentials." }, error.status ?? 400);
     }
 
     if (!data.session) {
