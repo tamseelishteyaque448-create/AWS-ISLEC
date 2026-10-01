@@ -32,16 +32,16 @@ insert into public.projects (id, slug, title, category, status, description, pro
   ('20000000-0000-4000-8000-000000000002', 'tiny-observability', 'Tiny Observability', 'DevOps', 'in_progress', 'A minimal observability starter that makes traces, logs, and meaningful signals easier to see.', 34, array['CloudWatch', 'OpenTelemetry', 'CDK'], '00000000-0000-4000-8000-000000000002'),
   ('20000000-0000-4000-8000-000000000003', 'open-source-atlas', 'Open Source Atlas', 'Community', 'shipped', 'A shared map of open-source opportunities for students ready to make their first contribution.', 100, array['Next.js', 'TypeScript', 'Vercel'], '00000000-0000-4000-8000-000000000003');
 
-insert into public.project_members (project_id, profile_id, role) values
-  ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'owner'),
-  ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', 'contributor'),
-  ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000003', 'contributor'),
-  ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', 'owner'),
-  ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000004', 'contributor'),
-  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000003', 'owner'),
-  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000001', 'contributor'),
-  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000004', 'contributor'),
-  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000005', 'contributor');
+insert into public.project_members (project_id, profile_id, role, status) values
+  ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'owner', 'active'),
+  ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', 'contributor', 'active'),
+  ('20000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000003', 'contributor', 'active'),
+  ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', 'owner', 'active'),
+  ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000004', 'contributor', 'active'),
+  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000003', 'owner', 'active'),
+  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000001', 'contributor', 'active'),
+  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000004', 'contributor', 'active'),
+  ('20000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000005', 'contributor', 'active');
 
 insert into public.events (id, slug, title, event_type, status, starts_at, location, context, attendance_label) values
   ('30000000-0000-4000-8000-000000000001', 'ship-it-serverless-study-hall', 'Ship it: a serverless study hall', 'Virtual', 'upcoming', '2026-08-28 18:00:00+00', 'Virtual', 'Bring the project you are stuck on. We will make progress together, one small deployment at a time.', 'Open study hall'),
