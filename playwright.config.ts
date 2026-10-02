@@ -5,6 +5,7 @@
  */
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: '**/disposable/**',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

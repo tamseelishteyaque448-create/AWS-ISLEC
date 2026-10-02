@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Archive, CheckCircle2, ChevronRight, Circle, ClipboardList, FolderKanban, Plus, UsersRound } from "lucide-react";
 import {
   archiveProjectMilestone,
@@ -153,6 +154,7 @@ function MilestoneCard({ milestone, tasks, project, viewerId, isOwner, writable 
 }
 
 export function ProjectWorkspace({ project, viewerId }: { project: Workspace; viewerId: string }) {
+  const router = useRouter();
   const tabPrefix = useId();
   const [activeTab, setActiveTab] = useState<"overview" | "team" | "work">("overview");
   const mine = project.members.find((member) => member.profile_id === viewerId);
@@ -169,6 +171,10 @@ export function ProjectWorkspace({ project, viewerId }: { project: Workspace; vi
   const [editState, editAction, editPending] = useActionState(updateMemberProject, initial);
   const [submitState, submitAction, submitPending] = useActionState(submitProjectForReview, initial);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteMemberProject, initial);
+
+  useEffect(() => {
+    if (deleteState.status === "success") router.replace("/member/projects");
+  }, [deleteState.status, router]);
 
   const tabs = [
     { id: "overview" as const, label: "Overview", icon: FolderKanban },

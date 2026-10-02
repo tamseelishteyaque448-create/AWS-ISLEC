@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "eslint app components data lib proxy.ts",
     "test:e2e": "playwright test",
+    "test:e2e:disposable": "node scripts/run-disposable-e2e.mjs",
+    "test:e2e:disposable:guard": "node --test tests/unit/disposable-e2e-env.test.mjs",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset --local",

@@ -18,6 +18,8 @@ Useful scripts:
 | `npm run start` | Serve a completed build |
 | `npm run lint` | Lint `app`, `components`, `data`, `lib`, and `proxy.ts` |
 | `npm run test:e2e` | Run Playwright tests |
+| `npm run test:e2e:disposable:guard` | Run offline tests for the local-disposable environment guard |
+| `npm run test:e2e:disposable` | Run destructive lifecycle E2E only against explicitly configured local disposable Supabase |
 | `npm run supabase:start` / `stop` | Start or stop local Supabase |
 | `npm run supabase:reset` | Reset local Supabase and apply migrations/seed (destructive to local data) |
 | `npm run supabase:db:lint` | Lint the local database |
@@ -30,4 +32,4 @@ The normal branch/PR flow is: create a focused branch, make one coherent change,
 
 ## Environment values
 
-Use `.env.example` as the public template. `.env.local` and `.env.qa.local` are ignored local files. Never paste their values into issues, commits, or documentation.
+Use `.env.example` as the public template. `.env.local`, `.env.qa.local`, and `.env.e2e.local` are ignored local files. Never paste their values into issues, commits, or documentation. The disposable E2E command requires `.env.e2e.local` and fails closed unless it identifies the configured loopback app and local Supabase API; normal development and E2E commands do not use this destructive suite.
