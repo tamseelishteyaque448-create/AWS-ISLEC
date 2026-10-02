@@ -959,7 +959,7 @@ details > summary:hover { color: var(--color-orange); }
 
 /* Give the workspace a denser, more editorial entry point without changing its controls. */
 .workspace-hero { box-shadow: var(--shadow-lg); }
-.workspace-hero h1 { max-width: 720px; }
+.workspace-hero h1 { max-width: 720px; color: var(--color-white); }
 .workspace-identity { display: flex; align-items: center; gap: 15px; }
 .workspace-identity h1 { margin-bottom: 0; }
 .workspace-monogram { display: grid; flex: 0 0 auto; width: 58px; height: 58px; place-items: center; border: 1px solid rgb(255 255 255 / 24%); border-radius: 14px; background: rgb(255 255 255 / 10%); color: var(--color-orange); font: 500 16px var(--font-mono); letter-spacing: .08em; }
