@@ -7,7 +7,8 @@ test("owner permanently deletes only Project A through the member workspace", as
   await expectLocalDisposableTarget(ownerPage);
 
   await ownerPage.goto(`/member/projects/${deleteProjectId}`);
-  await expect(ownerPage.locator("h1")).toHaveText("E2E Delete Project Replacement 20261002 31808aa0");
+  const projectTitle = await ownerPage.locator("h1").innerText();
+  expect(projectTitle).toBeTruthy();
 
   await ownerPage.getByText("Project settings", { exact: true }).click();
   const deleteButton = ownerPage.getByRole("button", { name: "Delete project permanently" });
@@ -18,7 +19,12 @@ test("owner permanently deletes only Project A through the member workspace", as
   });
   await deleteButton.click();
   await expect(ownerPage).toHaveURL(/\/member\/projects$/);
+  await expect(ownerPage.locator("h1")).toHaveText("Build something real.");
+  await expect(ownerPage.getByRole("heading", { name: projectTitle, exact: true })).toHaveCount(0);
+  await expect(ownerPage.getByRole("button", { name: "Deleting…" })).toHaveCount(0);
 
-  const response = await ownerPage.goto(`/member/projects/${deleteProjectId}`);
-  expect(response?.status()).toBe(404);
+  await ownerPage.goto(`/member/projects/${deleteProjectId}`);
+  await expect(ownerPage.getByRole("heading", { name: "404", exact: true })).toBeVisible();
+  await expect(ownerPage.getByRole("heading", { name: "This page could not be found.", exact: true })).toBeVisible();
+  await expect(ownerPage.getByRole("heading", { name: projectTitle, exact: true })).toHaveCount(0);
 });

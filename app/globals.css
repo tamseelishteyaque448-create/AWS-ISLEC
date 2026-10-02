@@ -567,9 +567,30 @@ details > summary:hover { color: var(--color-orange); }
     width: min(100% - 32px, var(--content-readable));
     min-height: 68px;
     gap: 12px;
+    flex-wrap: wrap;
   }
-  .public-nav { display: none; }
-  .public-actions { margin-left: auto; gap: 9px; }
+  .public-logo,
+  .public-actions { flex: 0 0 auto; }
+  .public-nav {
+    display: flex;
+    min-width: 0;
+    flex: 0 0 100%;
+    order: 2;
+    width: 100%;
+    gap: 4px;
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .public-nav::-webkit-scrollbar { display: none; }
+  .public-nav a {
+    display: flex;
+    flex: 0 0 auto;
+    min-height: 44px;
+    align-items: center;
+    padding-inline: 4px;
+  }
+  .public-actions { order: 1; margin-left: auto; gap: 9px; }
   .public-workspace-link { font-size: 12px; }
   .public-join { min-height: 36px; padding-inline: 11px; }
   .public-main { width: min(100% - 32px, var(--content-readable)); padding-top: 48px; }
@@ -580,6 +601,15 @@ details > summary:hover { color: var(--color-orange); }
   .project-request-actions { width: 100%; }
   .admin-event-actions .button,
   .workspace-inline-actions .button { flex: 1 1 auto; }
+}
+
+@media (min-width:681px) and (max-width:900px) {
+  .public-nav a {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+  }
+  .public-join { min-height: 44px; }
 }
 
 /* UI-1 challenge benchmark */

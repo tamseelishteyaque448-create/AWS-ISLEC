@@ -20,7 +20,7 @@ export default defineConfig({
   },
   webServer: {
     command: "node scripts/start-disposable-e2e-app.mjs",
-    url: target.appUrl,
+    url: `${target.appUrl}/api/e2e/environment`,
     reuseExistingServer: false,
     timeout: 120_000,
   },
