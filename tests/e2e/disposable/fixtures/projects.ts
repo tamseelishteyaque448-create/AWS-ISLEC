@@ -4,6 +4,7 @@ export type DisposableProjectFixtures = {
   deleteProjectId: string;
   archivedProjectId: string;
   pendingReviewProjectId: string;
+  joinProofProjectId: string;
 };
 
 export function getDisposableProjectFixtures(
@@ -13,6 +14,7 @@ export function getDisposableProjectFixtures(
     ["E2E_DELETE_PROJECT_ID", "deleteProjectId"],
     ["E2E_ARCHIVED_PROJECT_ID", "archivedProjectId"],
     ["E2E_PENDING_PROJECT_ID", "pendingReviewProjectId"],
+    ["E2E_JOIN_PROOF_PROJECT_ID", "joinProofProjectId"],
   ] as const;
   const ids = entries.map(([key]) => {
     const value = env[key];
@@ -30,5 +32,6 @@ export function getDisposableProjectFixtures(
     deleteProjectId: ids[0],
     archivedProjectId: ids[1],
     pendingReviewProjectId: ids[2],
+    joinProofProjectId: ids[3],
   };
 }

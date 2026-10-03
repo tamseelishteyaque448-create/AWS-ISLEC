@@ -19,6 +19,7 @@ const projectFixtureKeys = [
   "E2E_DELETE_PROJECT_ID",
   "E2E_ARCHIVED_PROJECT_ID",
   "E2E_PENDING_PROJECT_ID",
+  "E2E_JOIN_PROOF_PROJECT_ID",
 ];
 const allowedKeys = new Set([
   "E2E_ENV",

@@ -11,7 +11,7 @@ Future implementation work must read this document first, inspect the current re
 **Version:** 1.0
 **Last updated:** 2026-09-19
 **Owner / authority:** AWS-ISLEC product and engineering maintainers
-**Implementation status:** ARCHITECTURE APPROVED - NOT IMPLEMENTED
+**Implementation status:** DATABASE CORE, SERVER-SIDE SERVICES, AND PHASE 4A MEMBER UI IMPLEMENTED; ADMIN UI AND RUNTIME WORKFLOW VERIFICATION REMAIN
 
 In scope: practical assignments, member submissions, proof, admin review, feedback, resubmission, approval, controlled recognition, security, and phased delivery.
 
@@ -175,27 +175,13 @@ Approval metadata, reviewer identity, approval time, and reward state are server
 
 ## 11. Submission Lifecycle
 
-Persistent statuses:
+The per-member work item owns the current lifecycle status:
 
-`DRAFT -> SUBMITTED -> CHANGES_REQUESTED -> SUBMITTED -> APPROVED`
+`ASSIGNED -> IN_PROGRESS -> SUBMITTED -> CHANGES_REQUESTED -> RESUBMITTED -> APPROVED`
 
-Alternative terminal path:
+`CANCELLED` is an optional admin-only terminal state. Each submission or resubmission creates a new immutable revision. Review decisions are append-only and limited to `CHANGES_REQUESTED` and `APPROVED`; `REJECTED` is not a workflow state.
 
-`SUBMITTED -> REJECTED`
-
-`UNDER_REVIEW` does not need to be persistent if review is an atomic admin action. `RESUBMITTED` does not need a separate status; it is a new transition to `SUBMITTED` with review history preserved.
-
-Allowed transitions:
-
-- member creates `DRAFT`;
-- member edits `DRAFT`;
-- member submits `DRAFT`;
-- admin requests changes from `SUBMITTED`;
-- member edits and resubmits `CHANGES_REQUESTED`;
-- admin approves `SUBMITTED`;
-- admin rejects `SUBMITTED`.
-
-Forbidden transitions include member approval/rejection, direct client status changes, editing approved content without an explicit correction policy, and skipping submission before review.
+The database allows an assigned member to start and submit their own work item; only an admin may assign, review, approve, or cancel. The database rejects direct status changes, review mutation, duplicate revisions for a work item/revision number, approval before submission, member approval, and transitions out of terminal states.
 
 ## 12. Review System
 
@@ -220,15 +206,12 @@ The detail view should show member information, assignment requirements, explana
 
 Actions:
 
-- **Approve & appreciate:** approve and initiate controlled recognition.
-- **Request changes:** requires clear feedback.
-- **Reject:** requires a professional reason.
-
-Suggested rejection reasons are deployment unavailable, repository unavailable, requirements not met, insufficient evidence, duplicate/copied work, misrepresentation, or other. These are product concepts, not final enum constraints.
+- **Approve:** approve submitted work. Reward processing is not wired yet.
+- **Request changes:** requires clear feedback and preserves the reviewed revision.
 
 ## 14. Member Submission Experience
 
-Members need to create a draft, save it, edit it, submit it, see status, read feedback, update a change-requested submission, resubmit, and see final approval/rejection.
+Members need to start assigned work, submit it, see status, read feedback, resubmit a new revision after changes are requested, and see final approval.
 
 After approval, the submission and its approval history should be immutable to the member. Any administrative correction must preserve the original review history and be auditable.
 
@@ -238,9 +221,7 @@ Evidence may include screenshots, images, documents, and demo proof. URL-based p
 
 Evidence must be private by default, owned by the submission, validated by type/size/URL rules, and exposed through authorized access or short-lived signed URLs where appropriate.
 
-The repository verifies a private `event-posters` Storage bucket and event-specific Storage policies. A generic Build & Prove evidence bucket, upload utility, signed URL flow, and evidence lifecycle are **NOT IMPLEMENTED**.
-
-Do not reuse event-poster storage for arbitrary submission evidence.
+The local schema has a private `build-prove-private` bucket restricted to images and PDFs up to 10 MiB. Admins can manage reference objects under assignment paths; authenticated assignees and admins can read authorized Build & Prove objects through Storage RLS. Assignment/evidence metadata and an assignee-scoped access helper exist. Member upload and signed-download application flows are **NOT IMPLEMENTED**. Do not reuse event-poster storage for Build & Prove.
 
 ## 16. Database Domain Model
 
@@ -248,9 +229,13 @@ Do not reuse event-poster storage for arbitrary submission evidence.
 
 Purpose: admin-authored practical work specifications. Owned by an admin creator. Related to many submissions. Published records are member-visible; drafts are admin-only. Integrity requires valid publication state and stable identity/slug.
 
+### `build_assignment_members`
+
+Purpose: one member's work item for an assignment, including status, reward snapshot, assignment actor, and timestamps. The `(assignment_id, member_id)` relationship is unique and work-item status changes are RPC-controlled.
+
 ### `build_submissions`
 
-Purpose: member implementation and proof for exactly one assignment. Owned by one member and one assignment. Has a lifecycle status and timestamps. Member-visible only to its owner; admin-visible to authorized admins. Integrity requires one assignment/member relationship and server-owned status/reward fields.
+Purpose: immutable member submission revision for one work item. A work item may have multiple numbered revisions, each authored by its assigned member. It does not own workflow status; that remains on the work item.
 
 ### `build_submission_reviews`
 
@@ -260,7 +245,9 @@ Purpose: append-only admin decisions and feedback. Belongs to exactly one submis
 
 Purpose: proof attachments or evidence metadata belonging to exactly one submission. Member-owned through the submission; admin-readable. Integrity requires authorized object ownership and validated evidence references.
 
-A separate reward ledger or equivalent idempotent approval record is recommended, but its final entity name is open.
+### `build_submission_rewards`
+
+Purpose: reward ledger uniquely keyed by work item. The ledger provides a database-level duplicate-award barrier, but approval does not yet create ledger entries or award points.
 
 ## 17. Relationships
 
@@ -270,11 +257,15 @@ ADMIN
   v
 BUILD ASSIGNMENT
   |
-  +----< BUILD SUBMISSION >---- MEMBER
+  +----< ASSIGNED WORK ITEM >---- MEMBER
                   |
-                  +----< REVIEW
+                  +----< SUBMISSION REVISION
+                  |
+                  +----< REVIEW (each review refers to a revision)
                   |
                   +----< EVIDENCE
+                  |
+                  +----< REWARD LEDGER ENTRY (future approval processing)
 ```
 
 An assignment defines the work. A submission is one member's proof against that assignment. Reviews belong to the submission and preserve decisions. Evidence belongs to the submission and must not become a general public file store.
@@ -285,9 +276,8 @@ Members can:
 
 - view published assignments;
 - view their own submissions;
-- create submissions for eligible assignments;
-- edit drafts;
-- edit change-requested submissions;
+- start their own assigned work item;
+- submit work for their own assigned item;
 - resubmit eligible submissions;
 - view their own review history;
 - manage eligible evidence attached to their own editable submission.
@@ -296,7 +286,7 @@ Members cannot see another member's private submission, modify reviews, approve/
 
 ## 19. Admin Access Model
 
-Admins can manage assignments, publish/unpublish assignments, view submissions/evidence, review submissions, request changes, approve, reject, inspect review history, and trigger controlled recognition/reward paths.
+Admins can manage assignments, publish/unpublish assignments, view submissions/evidence, assign members, review submissions, request changes, approve, inspect review history, and cancel eligible work items. Reward processing is not implemented.
 
 Authorization must reuse `requireAdmin()`, `private.is_admin()`, `private.admin_users`, and `admin_audit_log`. No second admin role system is permitted.
 
@@ -313,7 +303,7 @@ The client must never be trusted for admin authorization, approval/rejection, po
 
 ## 21. Reward / Recognition Model
 
-Approval may produce controlled points, a distinct activity, recognition, and future badge/stage integration. Final point values are **OPEN**.
+Approval is not currently connected to points, activities, or badges. A unique reward ledger row per work item is in place as a foundation. Final point values and the authoritative progression integration remain **OPEN**.
 
 Build & Prove approval must not call `complete_challenge()`, create `challenge_completions`, reuse challenge streak logic, or masquerade as a challenge. It must not alter project membership.
 
@@ -335,9 +325,9 @@ Future extension: approved submissions may become evidence consumed by achieveme
 
 Recommended member routes:
 
-- `/member/learn` - Build & Prove catalogue entry point
-- `/member/learn/[slug]` - assignment detail
-- `/member/learn/[slug]/submit` - submission workflow
+- `/member/learn` - four-domain Build & Prove overview
+- `/member/learn/[domain]` - member-assigned work with status and priority filters
+- `/member/learn/tasks/[workItemId]` - task brief, revision/review history, and state-aware member actions
 - `/member/submissions` - member submissions
 - `/member/submissions/[id]` - submission detail/status/history
 
@@ -347,13 +337,13 @@ Recommended admin routes:
 - `/admin/learning/submissions` - review queue
 - `/admin/learning/submissions/[id]` - review detail
 
-All are **PLANNED - NOT IMPLEMENTED** for Build & Prove. `/admin/learning` currently manages legacy learning paths, so it must not be silently overwritten.
+The three member routes above are implemented in Phase 4A. The additional member routes and all Build & Prove admin routes remain **PLANNED - NOT IMPLEMENTED**. `/admin/learning` currently manages legacy learning paths, so it must not be silently overwritten.
 
 ## 25. `/member/learn` Product Contract
 
-The future `/member/learn` page communicates **BUILD & PROVE**. It should contain an introduction, member context, assignment catalogue, difficulty grouping, assignment cards, assignment status, completed/submitted indicators, and entry to assignment detail.
+The `/member/learn` entry page communicates **BUILD & PROVE** and links to the four domains. Domain pages show assigned work and status/priority filters. Work-item detail includes the objective, requirements, deadline, reward snapshot, reference metadata, revision history, feedback, and only the member action permitted by the current state.
 
-It must not become a grid of challenge/quiz cards or learning-path cards. The exact visual design is **PLANNED**. The legacy challenge system remains available until an explicit replacement rollout.
+It must not become a grid of challenge/quiz cards or learning-path cards. The legacy challenge system remains available at `/member/challenges`. Phase 4A displays private reference/evidence metadata but intentionally does not implement file upload or download. No Build & Prove admin UI is included in this phase.
 
 ## 26. Admin Learning Architecture
 
@@ -549,7 +539,7 @@ Use additive-first migrations. Do not delete legacy challenge tables, rewrite pr
 - **Review:** Admin decision and feedback record.
 - **Approval:** Admin acceptance that may trigger controlled recognition.
 - **Changes Requested:** Review outcome requiring member improvement and resubmission.
-- **Rejection:** Review outcome that ends the current submission attempt without approval.
+- **Cancelled:** Admin-only terminal state for an assignment work item; not a review decision.
 - **Recognition:** Activity, points, badge, or future progression signal derived from approved work.
 - **Build & Prove:** The practical assignment-to-proof product domain.
 - **Legacy Challenge:** Existing quiz-style learning mission and completion system.
@@ -576,19 +566,20 @@ Use additive-first migrations. Do not delete legacy challenge tables, rewrite pr
 ```text
 BUILD & PROVE
 Architecture: APPROVED
-Database: NOT IMPLEMENTED
-RLS: NOT IMPLEMENTED
-Backend: NOT IMPLEMENTED
-Frontend: NOT IMPLEMENTED
-Admin Review: NOT IMPLEMENTED
-Evidence Storage: NOT IMPLEMENTED
-Rewards: NOT IMPLEMENTED
-E2E: NOT IMPLEMENTED
+Database core: IMPLEMENTED; local disposable database validated
+RLS/RPC foundation: IMPLEMENTED; focused rollback-only local test passes
+Application mutation and read/query services: IMPLEMENTED
+Member frontend Phase 4A: IMPLEMENTED; direct local startup PASS; viewport E2E passed twice at 320, 360, 390, 412, 768, 1024, and 1440px; a later run failed during contributor login setup
+Admin frontend: NOT IMPLEMENTED
+Admin review RPCs: IMPLEMENTED; UI NOT IMPLEMENTED
+Private reference storage authorization: IMPLEMENTED locally; member upload/download flow NOT IMPLEMENTED
+Reward ledger uniqueness: IMPLEMENTED; approval award integration NOT IMPLEMENTED
+E2E: focused viewport assertions passed twice; the latest run did not enter the test body because local contributor login remained pending; cause UNCONFIRMED
 Production: NOT IMPLEMENTED
 ```
 
 **Next action:**
 
-`PHASE 1 - DATABASE CONTRACT REVIEW`
+`PHASE 4B - BUILD THE ADMIN ASSIGNMENT AND REVIEW UI`
 
-Do not implement Phase 1 until this contract is reviewed and accepted.
+The service layer exposes member-scoped domain/work-item/detail/revision reads and admin-scoped overview/task/detail/review-queue reads. Member reads derive identity from authenticated claims and omit cancelled tasks; existing RLS remains authoritative. Read models expose attachment metadata only, never Storage object paths or public URLs. Phase 4A uses the existing mutation RPC wrappers for start, submit, and resubmit. The overview and domain empty/work-list shells passed authenticated local disposable checks twice at the listed widths. A later run failed before test assertions while contributor authentication remained pending; local Auth health was HTTP 200, but the cause is **UNCONFIRMED**. Populated task detail, mutations, upload/download, admin UI, and hosted parity remain unverified.

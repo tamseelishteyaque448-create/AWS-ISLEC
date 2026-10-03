@@ -1,51 +1,73 @@
 import Link from "next/link";
+import { ArrowRight, BookOpenText, CalendarDays, FlaskConical, Palette } from "lucide-react";
 import { PageIntro } from "@/components/cards/PageIntro";
 import { Topline } from "@/components/ui/Topline";
-import { supabaseRepository } from "@/lib/services";
+import { getMemberBuildProveDomains } from "@/lib/services/build-prove";
 
-function LearnCatalogueState({ children }: { children: React.ReactNode }) {
-  return <div className="panel">{children}</div>;
+const domainDescriptions = {
+  innovation_research: "Research, experimentation, ideas and technical exploration.",
+  event_management: "Plan, coordinate and execute community events.",
+  media_design: "Visuals, creative assets, branding and communication.",
+  documentation: "Reports, records, guides and structured knowledge.",
+} as const;
+
+const domainIcons = {
+  innovation_research: FlaskConical,
+  event_management: CalendarDays,
+  media_design: Palette,
+  documentation: BookOpenText,
+} as const;
+
+function domainPath(key: string) {
+  return key.replaceAll("_", "-");
 }
 
-export default async function Learn() {
-  let paths;
+export default async function BuildAndProveHome() {
+  const domains = await getMemberBuildProveDomains();
 
-  try {
-    paths = await supabaseRepository.getLearningCatalogue();
-  } catch {
-    return <>
-      <Topline section="Learn / practice / repeat" />
-      <PageIntro kicker="Your curriculum" title="Get better by shipping." description="Short, practical paths for the moments when you want to understand a thing well enough to use it." />
-      <LearnCatalogueState>
-        <h2>Learning paths are unavailable right now.</h2>
-        <p className="muted">Please refresh the page and try again.</p>
-      </LearnCatalogueState>
-    </>;
-  }
-
-  const challenges = paths.flatMap((path) => path.challenges);
-
-  return <>
-    <Topline section="Learn / practice / repeat" />
-    <PageIntro kicker="Your curriculum" title="Get better by shipping." description="Short, practical paths for the moments when you want to understand a thing well enough to use it." />
-    {challenges.length === 0 ? (
-      <LearnCatalogueState>
-        <h2>No learning paths are available yet.</h2>
-        <p className="muted">Check back soon for the next practical path.</p>
-      </LearnCatalogueState>
-    ) : (
-      <div className="grid">
-        {challenges.map((challenge) => (
-          <article className="panel" key={challenge.id}>
-            <Link href={`/member/challenges/${challenge.slug}`}>
-              <span className="tag">{challenge.level}</span>
-              <h2 style={{ marginTop: 18 }}>{challenge.title}</h2>
-              <p className="muted">{challenge.detail}</p>
-              <div className="eyebrow" style={{ marginTop: 30 }}>+{challenge.points} pts</div>
-            </Link>
-          </article>
-        ))}
-      </div>
-    )}
-  </>;
+  return (
+    <>
+      <Topline section="AWS ISLEC / Build & Prove" />
+      <PageIntro
+        kicker="Your work"
+        title="Build & Prove"
+        description="Open your domain, work through assigned tasks, submit your proof, and use reviewer feedback to move each task forward."
+      />
+      <section className="build-domain-grid" aria-label="Build & Prove domains">
+        {domains.map((domain) => {
+          const Icon = domainIcons[domain.key];
+          return (
+            <article className="build-domain-card" key={domain.key}>
+              <div className="build-domain-card-top">
+                <span className={`build-domain-icon ${domain.key}`}>
+                  <Icon size={21} aria-hidden="true" />
+                </span>
+                <span className="build-domain-count">
+                  {domain.taskCount} {domain.taskCount === 1 ? "task" : "tasks"}
+                </span>
+              </div>
+              <div>
+                <h2>{domain.name}</h2>
+                <p>{domainDescriptions[domain.key]}</p>
+              </div>
+              <div className="build-domain-card-footer">
+                <span>{domain.activeTaskCount} active</span>
+                <span>{domain.awaitingReviewCount} awaiting review</span>
+              </div>
+              <Link
+                className="build-domain-link"
+                href={`/member/learn/${domainPath(domain.key)}`}
+                aria-label={`Open ${domain.name} tasks`}
+              >
+                View assigned work <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+            </article>
+          );
+        })}
+      </section>
+      <p className="build-legacy-link">
+        Looking for learning missions? <Link href="/member/challenges">Browse legacy challenges</Link>
+      </p>
+    </>
+  );
 }

@@ -13,8 +13,17 @@ The ordered files in `supabase/migrations/` are the repository schema/security a
 | Events | Events, attendees, publication/status, capacity, registration/cancellation, attendance, and poster delivery |
 | Projects | Projects, members, reviews, join requests, URL-only skill proofs, workspace milestones/tasks, lifecycle RPCs |
 | Progression | Points, monotonic `profiles.stage`, activities, badges, achievements, and leaderboard read projections |
+| Build & Prove | Admin-authored assignments, member work items, immutable numbered submission revisions, append-only reviews, private evidence metadata, and a per-work-item reward ledger |
 | Admin | `private.admin_users` and public audit log with admin-only access |
 
 RLS is enabled on protected tables. Sensitive writes are deliberately concentrated in schema-qualified RPCs with explicit authenticated grants; direct table privileges are not implied by TypeScript types. Activity generation and point awards are designed to be transactional and idempotent.
 
 The source migration chain includes Projects V2.2 workspace foundation (`20260915100000_projects_v2_2_workspace_foundation.sql`). Whether the deployed database exactly matches this chain, and whether all policies/RPCs execute correctly there, is **NOT VERIFIED**.
+
+## Build & Prove core
+
+The additive Build & Prove workflow is defined by `20261004003000_build_prove_core_workflow.sql`; `20261004010000_retire_build_prove_prototype_rpcs.sql` retires old mutable prototype RPC behavior. The member work item in `build_assignment_members` owns its lifecycle status. Each submission is a numbered immutable revision in `build_submissions`; reviews are append-only and refer to a revision. Direct authenticated table mutations are not the workflow interface; guarded RPCs enforce ownership, admin review, legal transitions, and idempotent operation behavior.
+
+The `build-prove-private` Storage bucket is non-public. Admins manage assignment reference objects; assignee/admin read authorization is checked by Storage policies and a caller-scoped helper. Member file uploads are not enabled. `build_submission_rewards` provides a unique per-work-item ledger foundation, but approval does not yet award points or update progression.
+
+The migration and database behavior have been applied and tested only in local disposable Supabase for this phase. Hosted migration parity and production behavior are **NOT VERIFIED**.

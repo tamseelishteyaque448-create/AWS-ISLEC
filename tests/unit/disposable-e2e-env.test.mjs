@@ -27,6 +27,7 @@ const completeEnvironment = {
   E2E_DELETE_PROJECT_ID: "10000000-0000-4000-8000-000000000001",
   E2E_ARCHIVED_PROJECT_ID: "10000000-0000-4000-8000-000000000002",
   E2E_PENDING_PROJECT_ID: "10000000-0000-4000-8000-000000000003",
+  E2E_JOIN_PROOF_PROJECT_ID: "10000000-0000-4000-8000-000000000004",
 };
 
 function validate(overrides = {}) {
@@ -107,6 +108,7 @@ test("rejects missing credentials and fixture IDs", () => {
     "E2E_DELETE_PROJECT_ID",
     "E2E_ARCHIVED_PROJECT_ID",
     "E2E_PENDING_PROJECT_ID",
+    "E2E_JOIN_PROOF_PROJECT_ID",
   ]) {
     assert.throws(() => validate({ [key]: undefined }), /Missing required disposable E2E setting/);
   }
@@ -120,6 +122,10 @@ test("rejects duplicate identities across all roles and duplicate project fixtur
   assert.throws(() => validate({ E2E_ADMIN_EMAIL: "owner@example.test" }), /distinct account/);
   assert.throws(
     () => validate({ E2E_PENDING_PROJECT_ID: completeEnvironment.E2E_DELETE_PROJECT_ID }),
+    /fixture IDs must be distinct/,
+  );
+  assert.throws(
+    () => validate({ E2E_JOIN_PROOF_PROJECT_ID: completeEnvironment.E2E_DELETE_PROJECT_ID }),
     /fixture IDs must be distinct/,
   );
 });

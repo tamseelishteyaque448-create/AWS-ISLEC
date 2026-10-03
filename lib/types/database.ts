@@ -77,6 +77,7 @@ export type Database = {
           activity_key: string
           activity_type: string
           badge_id: string | null
+          build_submission_id: string | null
           created_at: string
           detail: string
           event_id: string | null
@@ -93,6 +94,7 @@ export type Database = {
           activity_key: string
           activity_type: string
           badge_id?: string | null
+          build_submission_id?: string | null
           created_at?: string
           detail?: string
           event_id?: string | null
@@ -109,6 +111,7 @@ export type Database = {
           activity_key?: string
           activity_type?: string
           badge_id?: string | null
+          build_submission_id?: string | null
           created_at?: string
           detail?: string
           event_id?: string | null
@@ -158,6 +161,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      build_assignments: {
+        Row: { id: string; slug: string; title: string; summary: string; objective: string; difficulty: string; domain: string; assignment_scope: string; publication_state: string; published: boolean; is_archived: boolean; deadline_at: string | null; priority: string; requirements: NonNullable<Json>; deliverables: NonNullable<Json>; submission_requirements: NonNullable<Json>; evaluation_criteria: NonNullable<Json>; reward_points: number; sort_order: number; created_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; slug: string; title: string; summary?: string; objective?: string; difficulty: string; domain?: string; assignment_scope?: string; publication_state?: string; published?: boolean; is_archived?: boolean; deadline_at?: string | null; priority?: string; requirements?: NonNullable<Json>; deliverables?: NonNullable<Json>; submission_requirements?: NonNullable<Json>; evaluation_criteria?: NonNullable<Json>; reward_points?: number; sort_order?: number; created_by: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; slug?: string; title?: string; summary?: string; objective?: string; difficulty?: string; domain?: string; assignment_scope?: string; publication_state?: string; published?: boolean; is_archived?: boolean; deadline_at?: string | null; priority?: string; requirements?: NonNullable<Json>; deliverables?: NonNullable<Json>; submission_requirements?: NonNullable<Json>; evaluation_criteria?: NonNullable<Json>; reward_points?: number; sort_order?: number; created_by?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      build_assignment_attachments: {
+        Row: { id: string; assignment_id: string; storage_path: string; content_type: string; file_size: number; label: string; created_by: string; created_at: string }
+        Insert: { id?: string; assignment_id: string; storage_path: string; content_type: string; file_size: number; label?: string; created_by: string; created_at?: string }
+        Update: { never?: never }
+        Relationships: []
+      }
+      build_assignment_members: {
+        Row: { id: string; assignment_id: string; member_id: string; assigned_by: string; assigned_at: string; status: string; reward_points_snapshot: number; updated_at: string }
+        Insert: { id?: string; assignment_id: string; member_id: string; assigned_by: string; assigned_at?: string; status?: string; reward_points_snapshot?: number; updated_at?: string }
+        Update: { never?: never }
+        Relationships: []
+      }
+      build_member_domains: {
+        Row: { profile_id: string; domain: string; assigned_by: string; assigned_at: string }
+        Insert: { profile_id: string; domain: string; assigned_by: string; assigned_at?: string }
+        Update: { never?: never }
+        Relationships: []
+      }
+      build_submission_evidence: {
+        Row: { id: string; submission_id: string; owner_id: string; storage_path: string; content_type: string; file_size: number; caption: string; created_at: string }
+        Insert: { id?: string; submission_id: string; owner_id: string; storage_path: string; content_type: string; file_size: number; caption?: string; created_at?: string }
+        Update: { never?: never }
+        Relationships: []
+      }
+      build_submission_reviews: {
+        Row: { id: string; work_item_id: string; submission_id: string; reviewer_id: string; decision: string; feedback: string; created_at: string }
+        Insert: { id?: string; work_item_id: string; submission_id: string; reviewer_id: string; decision: string; feedback?: string; created_at?: string }
+        Update: { never?: never }
+        Relationships: []
+      }
+      build_submission_rewards: {
+        Row: { id: string; work_item_id: string; submission_id: string; profile_id: string; points_awarded: number; activity_key: string; awarded_by: string; awarded_at: string }
+        Insert: { id?: string; work_item_id: string; submission_id: string; profile_id: string; points_awarded: number; activity_key: string; awarded_by: string; awarded_at?: string }
+        Update: { never?: never }
+        Relationships: []
+      }
+      build_submissions: {
+        Row: { id: string; work_item_id: string; member_id: string; revision_number: number; project_title: string; explanation: string; approach: string; technologies: string[]; challenges: string; learnings: string; future_improvements: string; repository_url: string | null; deployment_url: string | null; demo_url: string | null; submitted_at: string; created_at: string }
+        Insert: { id?: string; work_item_id: string; member_id: string; revision_number: number; project_title: string; explanation?: string; approach?: string; technologies?: string[]; challenges?: string; learnings?: string; future_improvements?: string; repository_url?: string | null; deployment_url?: string | null; demo_url?: string | null; submitted_at?: string; created_at?: string }
+        Update: { never?: never }
+        Relationships: []
       }
       badges: {
         Row: {
@@ -829,6 +880,33 @@ export type Database = {
       }
       archive_task: {
         Args: { p_project_id: string; p_task_id: string }
+        Returns: Json
+      }
+      assign_build_member: {
+        Args: { p_assignment_id: string; p_member_id: string }
+        Returns: Json
+      }
+      cancel_build_work_item: {
+        Args: { p_work_item_id: string }
+        Returns: Json
+      }
+      save_build_assignment: { Args: { p_assignment_id?: string | null; p_slug?: string | null; p_title?: string | null; p_summary?: string; p_objective?: string; p_difficulty?: string; p_domain?: string; p_assignment_scope?: string; p_publication_state?: string; p_deadline_at?: string | null; p_priority?: string; p_requirements?: Json; p_deliverables?: Json; p_submission_requirements?: Json; p_evaluation_criteria?: Json; p_reward_points?: number; p_sort_order?: number; p_member_ids?: string[] }; Returns: Json }
+      save_build_submission: { Args: { p_submission_id?: string | null; p_assignment_id?: string | null; p_project_title?: string; p_explanation?: string; p_approach?: string; p_technologies?: string[]; p_challenges?: string; p_learnings?: string; p_future_improvements?: string; p_repository_url?: string | null; p_deployment_url?: string | null; p_demo_url?: string | null }; Returns: Json }
+      submit_build_submission: { Args: { p_submission_id: string }; Returns: Json }
+      review_build_submission: { Args: { p_submission_id: string; p_decision: string; p_feedback?: string }; Returns: Json }
+      add_build_submission_evidence: { Args: { p_submission_id: string; p_storage_path: string; p_content_type: string; p_file_size: number; p_caption?: string }; Returns: Json }
+      set_build_member_domain: { Args: { p_profile_id: string; p_domain: string; p_assigned: boolean }; Returns: Json }
+      add_build_assignment_attachment: { Args: { p_assignment_id: string; p_storage_path: string; p_content_type: string; p_file_size: number; p_label?: string }; Returns: Json }
+      start_build_assignment: {
+        Args: { p_work_item_id: string }
+        Returns: Json
+      }
+      submit_build_work: {
+        Args: { p_work_item_id: string; p_project_title: string; p_explanation: string; p_approach: string; p_challenges?: string; p_learnings?: string; p_future_improvements?: string; p_repository_url?: string; p_deployment_url?: string; p_demo_url?: string; p_technologies?: string[] }
+        Returns: Json
+      }
+      resubmit_build_work: {
+        Args: { p_work_item_id: string; p_project_title: string; p_explanation: string; p_approach: string; p_challenges?: string; p_learnings?: string; p_future_improvements?: string; p_repository_url?: string; p_deployment_url?: string; p_demo_url?: string; p_technologies?: string[] }
         Returns: Json
       }
       complete_challenge: {
