@@ -15,6 +15,28 @@ This repository is maintained by Codex, Copilot, Kiro, and human developers. Rea
 - Run focused validation before completion and report **PASS**, **FAIL**, and **NOT VERIFIED** honestly.
 - Inspect `git diff`, `git diff --check`, and `git status` before reporting completion.
 - Never commit, push, deploy, or change secrets unless the user explicitly instructs it.
+- Never add any AI or Codebuff attribution footer to a commit message. See [Commit attribution](#commit-attribution).
+
+## Commit attribution
+
+**Never write a Codebuff footer, or any AI-generated attribution trailer, into a commit message. This is absolute and applies to every commit in this repository.**
+
+Prohibited in commit subjects and bodies, including trailers:
+
+- `Co-authored-by:` referencing Codebuff, an AI agent, a bot, or an assistant account.
+- `Generated with Codebuff`, `Generated with Copilot`, or any similar "generated with" line.
+- Any robot emoji (for example 🤖) used as a signature or attribution.
+- Any other line that credits an AI tool or agent as an author or co-author.
+
+Commit messages must be plain, human-readable project history. Write them in your own words, explaining *why* a change was made. If a tool, an agent, or a contributor convention would otherwise inject a footer, omit it rather than pass it through.
+
+Verify before committing:
+
+```bash
+git log -1 --format='%B' | grep -iE "co-authored-by|generated with|codebuff|copilot|claude|🤖"
+```
+
+A match is a violation. Remove the line and amend or re-commit before it reaches the repository.
 
 ## Required completion report
 

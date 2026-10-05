@@ -31,6 +31,12 @@ select set_config('build_prove.test_admin_id', admin_id::text, true),
        set_config('build_prove.test_third_member_id', third_member_id::text, true),
        set_config('build_prove.points_before',
          (select points::text from public.profiles where id = member_id), true),
+       set_config('build_prove.other_points_before',
+         (select points::text from public.profiles
+          where id = (select other_member_id from build_prove_test_context)), true),
+       set_config('build_prove.third_points_before',
+         (select points::text from public.profiles
+          where id = (select third_member_id from build_prove_test_context)), true),
        set_config('build_prove.challenge_count_before',
          (select count(*)::text from public.challenge_completions), true),
        set_config('build_prove.project_count_before',
@@ -107,6 +113,32 @@ select set_config(
   true
 );
 
+select public.save_build_assignment(
+  p_assignment_id => current_setting('build_prove.test_assignment_id')::uuid,
+  p_slug => (select slug from public.build_assignments
+             where id = current_setting('build_prove.test_assignment_id')::uuid),
+  p_title => (select title from public.build_assignments
+              where id = current_setting('build_prove.test_assignment_id')::uuid),
+  p_summary => (select summary from public.build_assignments
+                where id = current_setting('build_prove.test_assignment_id')::uuid),
+  p_objective => (select objective from public.build_assignments
+                  where id = current_setting('build_prove.test_assignment_id')::uuid),
+  p_difficulty => 'easy',
+  p_domain => 'documentation',
+  p_assignment_scope => 'individual',
+  p_publication_state => 'published',
+  p_priority => 'normal',
+  p_reward_points => 99
+);
+do $$
+begin
+  if (select reward_points_snapshot from public.build_assignment_members
+      where id = current_setting('build_prove.test_work_item_id')::uuid) <> 35 then
+    raise exception 'Task edits must not change the member reward snapshot';
+  end if;
+end;
+$$;
+
 do $$
 begin
   if (select count(*) from public.build_assignment_members
@@ -121,6 +153,10 @@ begin
   if has_function_privilege('anon', 'public.submit_build_work(uuid,text,text,text,text[],text,text,text,text,text,text)', 'execute')
      or not has_function_privilege('authenticated', 'public.submit_build_work(uuid,text,text,text,text[],text,text,text,text,text,text)', 'execute') then
     raise exception 'Workflow RPC grants are not restricted as expected';
+  end if;
+  if has_function_privilege('anon', 'public.award_build_submission_reward(uuid)', 'execute')
+     or not has_function_privilege('authenticated', 'public.award_build_submission_reward(uuid)', 'execute') then
+    raise exception 'Reward RPC grants are not restricted as expected';
   end if;
 end;
 $$;
@@ -217,17 +253,6 @@ end;
 $$;
 
 reset role;
-insert into public.build_submission_evidence(
-  submission_id, owner_id, storage_path, content_type, file_size, caption
-)
-values (
-  current_setting('build_prove.test_submission_1')::uuid,
-  current_setting('build_prove.test_member_id')::uuid,
-  'submissions/' || current_setting('build_prove.test_member_id') || '/' ||
-    current_setting('build_prove.test_submission_1') || '/proof.pdf',
-  'application/pdf', 1024, 'test evidence'
-);
-
 insert into public.build_assignment_attachments(
   assignment_id, storage_path, content_type, file_size, label, created_by
 )
@@ -248,10 +273,10 @@ begin
      or (select count(*) from public.build_submission_reviews
          where submission_id = current_setting('build_prove.test_submission_1')::uuid) <> 0
      or (select count(*) from public.build_submission_evidence
-         where submission_id = current_setting('build_prove.test_submission_1')::uuid) <> 1
+         where submission_id = current_setting('build_prove.test_submission_1')::uuid) <> 0
      or (select count(*) from public.build_assignment_attachments
          where assignment_id = current_setting('build_prove.reference_assignment_id')::uuid) <> 1 then
-    raise exception 'Member must read own work, revisions, evidence, and assigned reference metadata';
+    raise exception 'Member must read own work, revisions, and assigned reference metadata';
   end if;
 end;
 $$;
@@ -283,6 +308,14 @@ begin
         current_setting('build_prove.test_submission_1') || '/proof.pdf') then
     raise exception 'Another member must not access submission evidence';
   end if;
+  begin
+    perform public.award_build_submission_reward(
+      current_setting('build_prove.test_work_item_id')::uuid
+    );
+    raise exception 'Non-admin reward attempts must fail';
+  exception when insufficient_privilege then
+    null;
+  end;
   perform public.start_build_assignment(current_setting('build_prove.other_work_item_id')::uuid);
 end;
 $$;
@@ -347,8 +380,10 @@ begin
   v_result := public.review_build_submission(
     current_setting('build_prove.other_submission_id')::uuid, 'approved', 'Approved directly from submission.'
   );
-  if v_result->>'status' <> 'approved' then
-    raise exception 'Admin must approve directly from SUBMITTED';
+  if v_result->>'status' <> 'approved'
+     or v_result->>'reward_status' <> 'awarded'
+     or (v_result->>'points_awarded')::integer <> 35 then
+    raise exception 'Direct SUBMITTED approval must award its immutable work-item snapshot';
   end if;
   if (select count(*) from public.build_submission_reviews
       where work_item_id = current_setting('build_prove.test_work_item_id')::uuid) <> 1
@@ -458,20 +493,26 @@ begin
       current_setting('build_prove.test_submission_2')::uuid, 'approved', ''
     );
     raise exception 'A prior revision must not be reviewable after resubmission';
-  exception when sqlstate '40001' then
+  exception when sqlstate 'PT409' then
     null;
   end;
   v_result := public.review_build_submission(
     current_setting('build_prove.test_submission_3')::uuid, 'approved', 'Accepted.'
   );
-  if v_result->>'status' <> 'approved' or v_result->>'idempotent' <> 'false' then
-    raise exception 'Admin must approve the latest revision';
+  if v_result->>'status' <> 'approved'
+     or v_result->>'idempotent' <> 'false'
+     or v_result->>'reward_status' <> 'awarded'
+     or (v_result->>'points_awarded')::integer <> 35 then
+    raise exception 'Admin must approve the latest revision and award its snapshot';
   end if;
   v_result := public.review_build_submission(
     current_setting('build_prove.test_submission_3')::uuid, 'approved', 'Retry.'
   );
-  if v_result->>'status' <> 'approved' or v_result->>'idempotent' <> 'true' then
-    raise exception 'Repeated approval must be idempotent';
+  if v_result->>'status' <> 'approved'
+     or v_result->>'idempotent' <> 'true'
+     or v_result->>'reward_status' <> 'already_awarded'
+     or (v_result->>'points_awarded')::integer <> 35 then
+    raise exception 'Repeated approval must return the existing reward without duplication';
   end if;
   if (select count(*) from public.build_submission_reviews
       where work_item_id = current_setting('build_prove.test_work_item_id')::uuid) <> 3 then
@@ -524,58 +565,68 @@ end;
 $$;
 
 reset role;
+select set_config('request.jwt.claim.sub', current_setting('build_prove.test_third_member_id'), true);
+set local role authenticated;
+select public.start_build_assignment(current_setting('build_prove.third_work_item_id')::uuid);
+select set_config(
+  'build_prove.third_submission_id',
+  (public.submit_build_work(
+    current_setting('build_prove.third_work_item_id')::uuid,
+    'Rollback test submission', 'Used to prove approval and reward atomicity.', 'Created as the assigned member.'
+  )->>'submission_id'),
+  true
+);
+reset role;
+select set_config('request.jwt.claim.sub', current_setting('build_prove.test_admin_id'), true);
 do $$
 declare
   v_points integer;
-  v_activity_key text := 'build-core-test-' || replace(gen_random_uuid()::text, '-', '');
+  v_reward_result jsonb;
 begin
   select points into v_points from public.profiles
   where id = current_setting('build_prove.test_member_id')::uuid;
-  if v_points::text <> current_setting('build_prove.points_before') then
-    raise exception 'Core workflow approval must not award points yet';
+  if v_points::integer <> current_setting('build_prove.points_before')::integer + 35 then
+    raise exception 'The approved member work item must award exactly its snapshot';
+  end if;
+  if (select points from public.profiles
+      where id = current_setting('build_prove.test_other_member_id')::uuid)
+      <> current_setting('build_prove.other_points_before')::integer + 35 then
+    raise exception 'Direct approval must award exactly one work-item snapshot';
   end if;
 
-  insert into public.build_submission_rewards(
-    work_item_id, submission_id, profile_id, points_awarded, activity_key, awarded_by
-  ) values (
-    current_setting('build_prove.test_work_item_id')::uuid,
-    current_setting('build_prove.test_submission_3')::uuid,
-    current_setting('build_prove.test_member_id')::uuid,
-    35, v_activity_key, current_setting('build_prove.test_admin_id')::uuid
-  );
-  begin
-    insert into public.build_submission_rewards(
-      work_item_id, submission_id, profile_id, points_awarded, activity_key, awarded_by
-    ) values (
-      current_setting('build_prove.test_work_item_id')::uuid,
-      current_setting('build_prove.test_submission_3')::uuid,
-      current_setting('build_prove.test_member_id')::uuid,
-      35, v_activity_key || '-duplicate', current_setting('build_prove.test_admin_id')::uuid
-    );
-    raise exception 'Reward ledger must be unique per work item';
-  exception when unique_violation then
-    null;
-  end;
+  if (select count(*) from public.build_submission_rewards
+      where work_item_id in (
+        current_setting('build_prove.test_work_item_id')::uuid,
+        current_setting('build_prove.other_work_item_id')::uuid
+      )) <> 2
+     or not exists (
+       select 1 from public.build_submission_rewards
+       where work_item_id = current_setting('build_prove.test_work_item_id')::uuid
+         and submission_id = current_setting('build_prove.test_submission_3')::uuid
+         and profile_id = current_setting('build_prove.test_member_id')::uuid
+         and points_awarded = 35
+         and awarded_by = current_setting('build_prove.test_admin_id')::uuid
+     ) then
+    raise exception 'The immutable reward ledger must record one approved revision per work item';
+  end if;
 
-  insert into public.activities(
-    activity_key, profile_id, activity_type, title, detail, points, occurred_at, build_assignment_member_id
-  ) values (
-    v_activity_key, current_setting('build_prove.test_member_id')::uuid, 'build_prove',
-    'Approved work', 'test', 35, timezone('utc', now()),
+  if (select count(*) from public.activities
+      where build_assignment_member_id = current_setting('build_prove.test_work_item_id')::uuid
+        and activity_type = 'build_prove' and points = 35) <> 1
+     or (select count(*) from public.activities
+         where build_assignment_member_id = current_setting('build_prove.other_work_item_id')::uuid
+           and activity_type = 'build_prove' and points = 35) <> 1 then
+    raise exception 'Each approved work item must create exactly one Build & Prove activity';
+  end if;
+
+  v_reward_result := public.award_build_submission_reward(
     current_setting('build_prove.test_work_item_id')::uuid
   );
-  begin
-    insert into public.activities(
-      activity_key, profile_id, activity_type, title, detail, points, occurred_at, build_assignment_member_id
-    ) values (
-      v_activity_key || '-duplicate', current_setting('build_prove.test_member_id')::uuid, 'build_prove',
-      'Approved work', 'duplicate test', 35, timezone('utc', now()),
-      current_setting('build_prove.test_work_item_id')::uuid
-    );
-    raise exception 'Build reward activity must be unique per work item';
-  exception when unique_violation then
-    null;
-  end;
+  if v_reward_result->>'status' <> 'already_awarded'
+     or v_reward_result->>'idempotent' <> 'true'
+     or (v_reward_result->>'points_awarded')::integer <> 35 then
+    raise exception 'A retry must return the existing reward without changing points';
+  end if;
 
   if exists (
     select 1 from public.build_submissions s
@@ -598,6 +649,54 @@ begin
 end;
 $$;
 
+create or replace function public.build_prove_test_reject_reward_activity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.activity_type = 'build_prove' then
+    raise exception using errcode = 'PZ001', message = 'Test-only reward activity rejection';
+  end if;
+  return new;
+end;
+$$;
+create trigger build_prove_test_reject_reward_activity
+before insert on public.activities
+for each row execute function public.build_prove_test_reject_reward_activity();
+
+select set_config('request.jwt.claim.sub', current_setting('build_prove.test_admin_id'), true);
+set local role authenticated;
+do $$
+declare
+  v_result jsonb;
+begin
+  begin
+    perform public.review_build_submission(
+      current_setting('build_prove.third_submission_id')::uuid,
+      'approved', 'This approval must roll back when reward activity creation fails.'
+    );
+    raise exception 'Reward activity failure must abort approval';
+  exception when sqlstate 'PZ001' then
+    null;
+  end;
+  if (select status from public.build_assignment_members
+      where id = current_setting('build_prove.third_work_item_id')::uuid) <> 'submitted'
+     or (select count(*) from public.build_submission_reviews
+         where submission_id = current_setting('build_prove.third_submission_id')::uuid) <> 0
+     or (select count(*) from public.build_submission_rewards
+         where work_item_id = current_setting('build_prove.third_work_item_id')::uuid) <> 0
+     or (select points from public.profiles
+         where id = current_setting('build_prove.test_third_member_id')::uuid)
+         <> current_setting('build_prove.third_points_before')::integer then
+    raise exception 'Failed reward creation must roll back status, review, reward, and points';
+  end if;
+end;
+$$;
+
+reset role;
+drop trigger build_prove_test_reject_reward_activity on public.activities;
+drop function public.build_prove_test_reject_reward_activity();
 select set_config('request.jwt.claim.sub', current_setting('build_prove.test_admin_id'), true);
 set local role authenticated;
 do $$
@@ -608,6 +707,14 @@ begin
   if v_result->>'status' <> 'cancelled' or v_result->>'idempotent' <> 'false' then
     raise exception 'Admin must be able to cancel non-approved work';
   end if;
+  begin
+    perform public.award_build_submission_reward(
+      current_setting('build_prove.third_work_item_id')::uuid
+    );
+    raise exception 'Cancelled work must not be rewarded';
+  exception when sqlstate 'PT409' then
+    null;
+  end;
   v_result := public.cancel_build_work_item(current_setting('build_prove.third_work_item_id')::uuid);
   if v_result->>'status' <> 'cancelled' or v_result->>'idempotent' <> 'true' then
     raise exception 'Repeated cancellation must be idempotent';
@@ -649,6 +756,12 @@ begin
   begin
     perform public.start_build_assignment(current_setting('build_prove.test_work_item_id')::uuid);
     raise exception 'Anonymous workflow RPC execution must fail';
+  exception when insufficient_privilege then
+    null;
+  end;
+  begin
+    perform public.award_build_submission_reward(current_setting('build_prove.test_work_item_id')::uuid);
+    raise exception 'Anonymous reward RPC execution must fail';
   exception when insufficient_privilege then
     null;
   end;

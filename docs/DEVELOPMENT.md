@@ -24,6 +24,30 @@ Useful scripts:
 | `npm run supabase:reset` | Reset local Supabase and apply migrations/seed (destructive to local data) |
 | `npm run supabase:db:lint` | Lint the local database |
 
+## Type checking
+
+`tsconfig.json` typechecks against **generated** route types. Both `next-env.d.ts` (`./.next/dev/types/*`) and the `include` list (`./.next/types/*`) point at files that Next.js produces, not files that are committed. On a fresh clone those files do not exist yet.
+
+The consequence is that a bare `npx tsc --noEmit` is **not** a valid gate on a clean checkout. It typechecks against route types that may predate any route you just added, and it reports phantom errors such as:
+
+```text
+error TS2344: Type '"/admin/build-prove"' does not satisfy the constraint 'AppRoutes'.
+error TS2339: Property 'taskId' does not exist on type 'unknown'.
+```
+
+Those are stale-artifact errors, not real defects. They disappear as soon as the route types are regenerated.
+
+Use one of these instead:
+
+```bash
+npx next typegen && npx tsc --noEmit   # fast: regenerate types, then typecheck
+npm run build                          # authoritative: compiles, then typechecks
+```
+
+`npm run build` is the authoritative check because it regenerates the route types itself before type checking. Do not record a `tsc` result as PASS unless the route types were generated first, and do not "fix" an `AppRoutes` or `Property ... does not exist on type 'unknown'` error by editing `next-env.d.ts` or the `tsconfig` include list.
+
+Note that `next build` and `next dev` write different paths into the generated `next-env.d.ts` (`./.next/types/*` versus `./.next/dev/types/*`), so switching between them produces an expected diff in that file. It is generated; do not hand-edit it.
+
 ## Change workflow
 
 Read [AGENTS.md](../AGENTS.md), [.ai/CURRENT_PHASE.md](../.ai/CURRENT_PHASE.md), then the relevant domain document. Search for existing services, actions, validation, RPCs, and tests before adding code. Keep changes surgical, preserve security boundaries, and do not edit historical migrations.

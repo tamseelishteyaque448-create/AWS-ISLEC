@@ -187,9 +187,15 @@ export type Database = {
         Relationships: []
       }
       build_submission_evidence: {
-        Row: { id: string; submission_id: string; owner_id: string; storage_path: string; content_type: string; file_size: number; caption: string; created_at: string }
-        Insert: { id?: string; submission_id: string; owner_id: string; storage_path: string; content_type: string; file_size: number; caption?: string; created_at?: string }
+        Row: { id: string; submission_id: string | null; draft_id: string | null; owner_id: string; storage_path: string; content_type: string; file_size: number; caption: string; created_at: string }
+        Insert: { id?: string; submission_id?: string | null; draft_id?: string | null; owner_id: string; storage_path: string; content_type: string; file_size: number; caption?: string; created_at?: string }
         Update: { never?: never }
+        Relationships: []
+      }
+      build_submission_drafts: {
+        Row: { id: string; work_item_id: string; member_id: string; revision_number: number; project_title: string; explanation: string; approach: string; technologies: string[]; challenges: string; learnings: string; future_improvements: string; repository_url: string | null; deployment_url: string | null; demo_url: string | null; state: string; submission_id: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; work_item_id: string; member_id: string; revision_number: number; project_title: string; explanation?: string; approach?: string; technologies?: string[]; challenges?: string; learnings?: string; future_improvements?: string; repository_url?: string | null; deployment_url?: string | null; demo_url?: string | null; state?: string; submission_id?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; work_item_id?: string; member_id?: string; revision_number?: number; project_title?: string; explanation?: string; approach?: string; technologies?: string[]; challenges?: string; learnings?: string; future_improvements?: string; repository_url?: string | null; deployment_url?: string | null; demo_url?: string | null; state?: string; submission_id?: string | null; created_at?: string; updated_at?: string }
         Relationships: []
       }
       build_submission_reviews: {
@@ -895,6 +901,10 @@ export type Database = {
       submit_build_submission: { Args: { p_submission_id: string }; Returns: Json }
       review_build_submission: { Args: { p_submission_id: string; p_decision: string; p_feedback?: string }; Returns: Json }
       add_build_submission_evidence: { Args: { p_submission_id: string; p_storage_path: string; p_content_type: string; p_file_size: number; p_caption?: string }; Returns: Json }
+      save_build_submission_draft: { Args: { p_work_item_id: string; p_project_title: string; p_explanation?: string; p_approach?: string; p_technologies?: string[]; p_challenges?: string; p_learnings?: string; p_future_improvements?: string; p_repository_url?: string | null; p_deployment_url?: string | null; p_demo_url?: string | null }; Returns: Json }
+      register_build_draft_evidence: { Args: { p_draft_id: string; p_object_uuid: string; p_caption?: string }; Returns: Json }
+      remove_build_draft_evidence: { Args: { p_evidence_id: string }; Returns: Json }
+      submit_build_submission_draft: { Args: { p_draft_id: string }; Returns: Json }
       set_build_member_domain: { Args: { p_profile_id: string; p_domain: string; p_assigned: boolean }; Returns: Json }
       add_build_assignment_attachment: { Args: { p_assignment_id: string; p_storage_path: string; p_content_type: string; p_file_size: number; p_label?: string }; Returns: Json }
       start_build_assignment: {
@@ -903,6 +913,10 @@ export type Database = {
       }
       submit_build_work: {
         Args: { p_work_item_id: string; p_project_title: string; p_explanation: string; p_approach: string; p_challenges?: string; p_learnings?: string; p_future_improvements?: string; p_repository_url?: string; p_deployment_url?: string; p_demo_url?: string; p_technologies?: string[] }
+        Returns: Json
+      }
+      award_build_submission_reward: {
+        Args: { p_work_item_id: string }
         Returns: Json
       }
       resubmit_build_work: {

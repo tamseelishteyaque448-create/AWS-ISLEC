@@ -1,8 +1,14 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getAuthenticatedClaims } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import {
+  BuildProveEvidenceValidationError,
+  validateBuildProveEvidenceFile,
+  type BuildProveEvidenceMimeType,
+} from "@/lib/validation/build-prove-evidence";
 import type { Json, Tables } from "@/lib/types/database";
 
 export type BuildDomain =
@@ -10,6 +16,7 @@ export type BuildDomain =
   | "event_management"
   | "media_design"
   | "documentation";
+export type BuildProveDifficulty = "easy" | "medium" | "hard";
 export type BuildProveDomainKey = BuildDomain;
 export type BuildWorkStatus =
   | "assigned"
@@ -20,6 +27,7 @@ export type BuildWorkStatus =
   | "approved"
   | "cancelled";
 export type BuildReviewDecision = "approved" | "changes_requested";
+export type BuildProvePublicationState = "draft" | "published" | "archived";
 
 export type SaveBuildAssignmentInput = {
   assignmentId?: string;
@@ -27,10 +35,10 @@ export type SaveBuildAssignmentInput = {
   title: string;
   summary?: string;
   objective?: string;
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: BuildProveDifficulty;
   domain: BuildDomain;
   assignmentScope: "domain" | "individual";
-  publicationState: "draft" | "published" | "archived";
+  publicationState: BuildProvePublicationState;
   deadlineAt?: string | null;
   priority: "low" | "normal" | "high" | "urgent";
   requirements?: Json;
@@ -41,6 +49,42 @@ export type SaveBuildAssignmentInput = {
   sortOrder?: number;
   memberIds?: string[];
 };
+
+export type SaveBuildAssignmentResult = {
+  assignmentId: string;
+  publicationState: BuildProvePublicationState;
+};
+
+export type AssignBuildMemberResult = {
+  assignmentId: string;
+  memberId: string;
+  created: boolean;
+};
+
+export type CancelBuildWorkItemResult = {
+  status: "cancelled";
+  idempotent: boolean;
+};
+
+export type BuildProveAdminMutationErrorCode =
+  | "forbidden"
+  | "not_found"
+  | "invalid_input"
+  | "conflict"
+  | "failed";
+
+export class BuildProveAdminMutationError extends Error {
+  constructor(readonly code: BuildProveAdminMutationErrorCode) {
+    super({
+      forbidden: "Build & Prove administrator access is required.",
+      not_found: "The Build & Prove item was not found.",
+      invalid_input: "The Build & Prove request is invalid.",
+      conflict: "The Build & Prove item cannot be changed in its current state.",
+      failed: "Unable to complete the Build & Prove administrator operation.",
+    }[code]);
+    this.name = "BuildProveAdminMutationError";
+  }
+}
 
 export type SubmitBuildWorkInput = {
   workItemId: string;
@@ -55,6 +99,69 @@ export type SubmitBuildWorkInput = {
   deploymentUrl?: string | null;
   demoUrl?: string | null;
 };
+
+export type BuildSubmissionDraftResult = {
+  draftId: string;
+  revisionNumber: number;
+  state: "open";
+  idempotent: boolean;
+};
+
+export type BuildSubmissionResult = {
+  submissionId: string;
+  revisionNumber: number;
+  status: "submitted" | "resubmitted";
+  idempotent: boolean;
+};
+
+export type BuildProveEvidenceOperationCode =
+  | "unauthenticated"
+  | "invalid_input"
+  | "draft_unavailable"
+  | "draft_conflict"
+  | "draft_sealed"
+  | "cancelled"
+  | "invalid_file"
+  | "file_too_large"
+  | "unsupported_mime"
+  | "signature_mismatch"
+  | "storage_upload_failed"
+  | "evidence_registration_failed"
+  | "evidence_not_found"
+  | "forbidden"
+  | "storage_delete_failed"
+  | "evidence_cleanup_required"
+  | "storage_object_missing";
+
+const BUILD_PROVE_EVIDENCE_MESSAGES: Record<BuildProveEvidenceOperationCode, string> = {
+  unauthenticated: "Sign in to manage Build & Prove evidence.",
+  invalid_input: "The Build & Prove evidence request is invalid.",
+  draft_unavailable: "This draft is unavailable.",
+  draft_conflict: "This draft changed or is no longer accepting changes.",
+  draft_sealed: "Submitted evidence cannot be changed.",
+  cancelled: "Cancelled work does not accept evidence changes.",
+  invalid_file: "Choose a non-empty supported file.",
+  file_too_large: "Evidence files must be 10 MiB or smaller.",
+  unsupported_mime: "Only JPEG, PNG, WebP, and PDF files are supported.",
+  signature_mismatch: "The file contents do not match the selected file type.",
+  storage_upload_failed: "The upload could not be confirmed. A private file may require cleanup.",
+  evidence_registration_failed: "The upload could not be registered. The private file may require cleanup.",
+  evidence_not_found: "Evidence was not found.",
+  forbidden: "You are not allowed to access this evidence.",
+  storage_delete_failed: "The file could not be removed. Its evidence record is unchanged.",
+  evidence_cleanup_required: "The file was removed, but its evidence record needs cleanup.",
+  storage_object_missing: "The evidence file is no longer available.",
+};
+
+export class BuildProveEvidenceOperationError extends Error {
+  constructor(
+    readonly code: BuildProveEvidenceOperationCode,
+    readonly diagnosticId?: string,
+  ) {
+    super(BUILD_PROVE_EVIDENCE_MESSAGES[code]);
+    this.name = "BuildProveEvidenceOperationError";
+  }
+}
 
 type BuildAssignmentRow = Pick<
   Tables<"build_assignments">,
@@ -74,6 +181,7 @@ type BuildAssignmentRow = Pick<
   | "submission_requirements"
   | "evaluation_criteria"
   | "reward_points"
+  | "sort_order"
   | "created_at"
   | "updated_at"
 >;
@@ -92,7 +200,14 @@ type BuildSubmissionRow = Tables<"build_submissions">;
 type BuildReviewRow = Tables<"build_submission_reviews">;
 type BuildEvidenceRow = Pick<
   Tables<"build_submission_evidence">,
-  "id" | "submission_id" | "owner_id" | "content_type" | "file_size" | "caption" | "created_at"
+  | "id"
+  | "submission_id"
+  | "draft_id"
+  | "owner_id"
+  | "content_type"
+  | "file_size"
+  | "caption"
+  | "created_at"
 >;
 type BuildReferenceRow = Pick<
   Tables<"build_assignment_attachments">,
@@ -115,6 +230,15 @@ export type BuildProveEvidenceMetadata = {
   fileSize: number;
   caption: string;
   createdAt: string;
+};
+
+export type BuildProveSubmissionDraft = Omit<
+  BuildProveSubmissionRevision,
+  "id" | "workItemId" | "submittedAt" | "createdAt" | "reviews"
+> & {
+  id: string;
+  revisionNumber: number;
+  evidence: BuildProveEvidenceMetadata[];
 };
 
 export type BuildProveReferenceMetadata = {
@@ -151,10 +275,10 @@ export type BuildProveTaskDefinition = {
   title: string;
   summary: string;
   objective: string;
-  difficulty: string;
+  difficulty: BuildProveDifficulty;
   domain: BuildDomain;
   assignmentScope: "domain" | "individual";
-  publicationState: "draft" | "published" | "archived";
+  publicationState: BuildProvePublicationState;
   priority: "low" | "normal" | "high" | "urgent";
   deadlineAt: string | null;
   requirements: Json;
@@ -162,6 +286,7 @@ export type BuildProveTaskDefinition = {
   submissionRequirements: Json;
   evaluationCriteria: Json;
   rewardPoints: number;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -200,15 +325,25 @@ export type BuildProveTaskDetail = {
     assignedAt: string;
     status: BuildWorkStatus;
     rewardPointsSnapshot: number;
+    rewardPointsAwarded?: number | null;
     updatedAt: string;
   };
   referenceAttachments: BuildProveReferenceMetadata[];
+  openDraft: BuildProveSubmissionDraft | null;
   latestSubmission: BuildProveSubmissionRevision | null;
   revisionHistory: BuildProveSubmissionRevision[];
 };
 
 export type BuildProveAdminOverview = {
   totalTasks: number;
+  publishedTasks: number;
+  unpublishedTasks: number;
+  draftTasks: number;
+  archivedTasks: number;
+  assignedWorkItems: number;
+  submittedWorkItems: number;
+  cancelledWorkItems: number;
+  reviewQueueCount: number;
   activeTasks: number;
   awaitingReview: number;
   changesRequested: number;
@@ -228,6 +363,17 @@ export type BuildProveAdminTaskListItem = {
     handle: string;
     status: BuildWorkStatus;
   }>;
+};
+
+export type BuildProveAssignableMember = {
+  id: string;
+  fullName: string;
+  handle: string;
+  existingStatus: BuildWorkStatus | null;
+};
+
+export type BuildProveReferenceUploadResult = {
+  attachmentId: string;
 };
 
 export type BuildProveAdminTaskDetail = {
@@ -250,6 +396,8 @@ export type BuildProveReviewQueueItem = {
   latestRevisionNumber: number;
   latestSubmissionId: string;
   submittedAt: string;
+  submissionSummary: string;
+  evidenceCount: number;
 };
 
 export type BuildProveListFilters = {
@@ -264,6 +412,7 @@ export type BuildProveListFilters = {
 
 export type BuildProveAdminListFilters = BuildProveListFilters & {
   memberId?: string;
+  publicationState?: BuildProvePublicationState;
 };
 
 export type BuildProvePage<T> = {
@@ -335,6 +484,156 @@ async function requireMember() {
   return (await requireMemberContext()).supabase;
 }
 
+const BUILD_PROVE_PRIVATE_BUCKET = "build-prove-private";
+const BUILD_EVIDENCE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isJsonRecord(value: Json): value is { [key: string]: Json | undefined } {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function requireRpcRecord(value: Json): { [key: string]: Json | undefined } {
+  if (!isJsonRecord(value)) throw new BuildProveQueryError();
+  return value;
+}
+
+function adminMutationError(error: { code?: string }): BuildProveAdminMutationError {
+  if (error.code === "42501") return new BuildProveAdminMutationError("forbidden");
+  if (error.code === "P0002") return new BuildProveAdminMutationError("not_found");
+  if (error.code === "22023") return new BuildProveAdminMutationError("invalid_input");
+  if (error.code === "40001") return new BuildProveAdminMutationError("conflict");
+  return new BuildProveAdminMutationError("failed");
+}
+
+function readPublicationState(value: string | null): BuildProvePublicationState | null {
+  return value === "draft" || value === "published" || value === "archived"
+    ? value
+    : null;
+}
+
+function rpcOperationError(
+  error: { code?: string },
+  defaultCode: BuildProveEvidenceOperationCode,
+): BuildProveEvidenceOperationError {
+  if (error.code === "42501") return new BuildProveEvidenceOperationError("forbidden");
+  if (error.code === "P0002") return new BuildProveEvidenceOperationError("draft_unavailable");
+  if (error.code === "40001") return new BuildProveEvidenceOperationError("draft_conflict");
+  if (error.code === "22023") return new BuildProveEvidenceOperationError("invalid_input");
+  return new BuildProveEvidenceOperationError(defaultCode);
+}
+
+function validateSubmissionDraftInput(input: SubmitBuildWorkInput): boolean {
+  const validUrl = (value: string | null | undefined) => value == null || /^https?:\/\//i.test(value);
+  return BUILD_EVIDENCE_UUID.test(input.workItemId)
+    && input.projectTitle.trim().length > 0
+    && input.projectTitle.trim().length <= 160
+    && input.explanation.length <= 12000
+    && input.approach.length <= 12000
+    && (input.technologies?.length ?? 0) <= 25
+    && (input.challenges?.length ?? 0) <= 4000
+    && (input.learnings?.length ?? 0) <= 4000
+    && (input.futureImprovements?.length ?? 0) <= 4000
+    && validUrl(input.repositoryUrl)
+    && validUrl(input.deploymentUrl)
+    && validUrl(input.demoUrl);
+}
+
+function isBuildProveEvidenceMimeType(value: string): value is BuildProveEvidenceMimeType {
+  return value === "image/jpeg"
+    || value === "image/png"
+    || value === "image/webp"
+    || value === "application/pdf";
+}
+
+function rpcString(
+  record: { [key: string]: Json | undefined },
+  key: string,
+): string | null {
+  const value = record[key];
+  return typeof value === "string" ? value : null;
+}
+
+function rpcNumber(
+  record: { [key: string]: Json | undefined },
+  key: string,
+): number | null {
+  const value = record[key];
+  return typeof value === "number" ? value : null;
+}
+
+function rpcBoolean(
+  record: { [key: string]: Json | undefined },
+  key: string,
+): boolean | null {
+  const value = record[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+export async function saveBuildSubmissionDraft(
+  input: SubmitBuildWorkInput,
+): Promise<BuildSubmissionDraftResult> {
+  if (!validateSubmissionDraftInput(input)) {
+    throw new BuildProveEvidenceOperationError("invalid_input");
+  }
+  const supabase = await requireMember();
+  const { data, error } = await supabase.rpc("save_build_submission_draft", {
+    p_work_item_id: input.workItemId,
+    p_project_title: input.projectTitle,
+    p_explanation: input.explanation,
+    p_approach: input.approach,
+    p_technologies: input.technologies ?? [],
+    p_challenges: input.challenges ?? "",
+    p_learnings: input.learnings ?? "",
+    p_future_improvements: input.futureImprovements ?? "",
+    p_repository_url: input.repositoryUrl ?? null,
+    p_deployment_url: input.deploymentUrl ?? null,
+    p_demo_url: input.demoUrl ?? null,
+  });
+  if (error) throw rpcOperationError(error, "draft_unavailable");
+
+  const result = requireRpcRecord(data);
+  const draftId = rpcString(result, "draft_id");
+  const revisionNumber = rpcNumber(result, "revision_number");
+  const state = rpcString(result, "state");
+  const idempotent = rpcBoolean(result, "idempotent");
+  if (
+    !draftId
+    || !BUILD_EVIDENCE_UUID.test(draftId)
+    || revisionNumber === null
+    || state !== "open"
+    || idempotent === null
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return { draftId, revisionNumber, state, idempotent };
+}
+
+export async function submitBuildSubmissionDraft(draftId: string): Promise<BuildSubmissionResult> {
+  if (!BUILD_EVIDENCE_UUID.test(draftId)) {
+    throw new BuildProveEvidenceOperationError("invalid_input");
+  }
+  const supabase = await requireMember();
+  const { data, error } = await supabase.rpc("submit_build_submission_draft", {
+    p_draft_id: draftId,
+  });
+  if (error) throw rpcOperationError(error, "draft_conflict");
+
+  const result = requireRpcRecord(data);
+  const submissionId = rpcString(result, "submission_id");
+  const revisionNumber = rpcNumber(result, "revision_number");
+  const status = rpcString(result, "status");
+  const idempotent = rpcBoolean(result, "idempotent");
+  if (
+    !submissionId
+    || !BUILD_EVIDENCE_UUID.test(submissionId)
+    || revisionNumber === null
+    || (status !== "submitted" && status !== "resubmitted")
+    || idempotent === null
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return { submissionId, revisionNumber, status, idempotent };
+}
+
 async function fetchAllPages<T>(
   fetchPage: (from: number, to: number) => PromiseLike<PageQueryResult<T>>,
 ): Promise<T[]> {
@@ -382,6 +681,13 @@ function readDomain(value: string): BuildDomain {
   return value as BuildDomain;
 }
 
+function readDifficulty(value: string): BuildProveDifficulty {
+  if (value !== "easy" && value !== "medium" && value !== "hard") {
+    throw new BuildProveQueryError();
+  }
+  return value;
+}
+
 function readReviewDecision(value: string): BuildReviewDecision {
   if (value !== "approved" && value !== "changes_requested") {
     throw new BuildProveQueryError();
@@ -401,7 +707,7 @@ function mapTask(row: BuildAssignmentRow): BuildProveTaskDefinition {
     title: row.title,
     summary: row.summary,
     objective: row.objective,
-    difficulty: row.difficulty,
+    difficulty: readDifficulty(row.difficulty),
     domain: readDomain(row.domain),
     assignmentScope: row.assignment_scope as "domain" | "individual",
     publicationState: row.publication_state as "draft" | "published" | "archived",
@@ -412,6 +718,7 @@ function mapTask(row: BuildAssignmentRow): BuildProveTaskDefinition {
     submissionRequirements: row.submission_requirements,
     evaluationCriteria: row.evaluation_criteria,
     rewardPoints: row.reward_points,
+    sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -499,7 +806,7 @@ async function loadAssignments(
   for (const idsChunk of chunked([...new Set(ids)])) {
     const chunkRows = await fetchAllPages((from, to) =>
       supabase.from("build_assignments")
-        .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, created_at, updated_at")
+        .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, sort_order, created_at, updated_at")
         .in("id", idsChunk)
         .order("created_at", { ascending: false })
         .range(from, to));
@@ -550,13 +857,58 @@ async function loadEvidence(
   for (const idsChunk of chunked([...new Set(submissionIds)])) {
     const chunkRows = await fetchAllPages((from, to) =>
       supabase.from("build_submission_evidence")
-        .select("id, submission_id, owner_id, content_type, file_size, caption, created_at")
+        .select("id, submission_id, draft_id, owner_id, content_type, file_size, caption, created_at")
         .in("submission_id", idsChunk)
         .order("created_at", { ascending: true })
         .range(from, to));
     rows.push(...chunkRows);
   }
   return rows;
+}
+
+async function loadDraftEvidence(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  draftId: string,
+): Promise<BuildEvidenceRow[]> {
+  const rows = await fetchAllPages((from, to) =>
+    supabase.from("build_submission_evidence")
+      .select("id, submission_id, draft_id, owner_id, content_type, file_size, caption, created_at")
+      .eq("draft_id", draftId)
+      .order("created_at", { ascending: true })
+      .range(from, to));
+  return rows;
+}
+
+async function loadOpenSubmissionDraft(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workItemId: string,
+): Promise<BuildProveSubmissionDraft | null> {
+  const { data: draft, error } = await supabase
+    .from("build_submission_drafts")
+    .select("id, work_item_id, revision_number, project_title, explanation, approach, technologies, challenges, learnings, future_improvements, repository_url, deployment_url, demo_url, state")
+    .eq("work_item_id", workItemId)
+    .eq("state", "open")
+    .maybeSingle();
+  if (error) throw new BuildProveQueryError();
+  if (!draft) return null;
+  if (draft.state !== "open") throw new BuildProveQueryError();
+
+  const evidence = await loadDraftEvidence(supabase, draft.id);
+  return {
+    id: draft.id,
+    revisionNumber: draft.revision_number,
+    projectTitle: draft.project_title,
+    explanation: draft.explanation,
+    approach: draft.approach,
+    technologies: draft.technologies,
+    challenges: draft.challenges,
+    learnings: draft.learnings,
+    futureImprovements: draft.future_improvements,
+    repositoryUrl: draft.repository_url,
+    deploymentUrl: draft.deployment_url,
+    demoUrl: draft.demo_url,
+    evidence: evidence.filter((item) => item.draft_id === draft.id).map(mapEvidence),
+  };
 }
 
 async function loadReferences(
@@ -637,8 +989,21 @@ function validateFilters(filters: BuildProveListFilters) {
   normalizePage(filters.page, filters.pageSize);
 }
 
-export async function saveBuildAssignment(input: SaveBuildAssignmentInput) {
+export async function saveBuildAssignment(
+  input: SaveBuildAssignmentInput,
+): Promise<SaveBuildAssignmentResult> {
   await requireAdmin();
+  if (
+    !input
+    || typeof input !== "object"
+    || (input.assignmentId !== undefined
+      && (typeof input.assignmentId !== "string" || !BUILD_EVIDENCE_UUID.test(input.assignmentId)))
+    || (input.memberIds !== undefined
+      && (!Array.isArray(input.memberIds) || input.memberIds.some((id) =>
+        typeof id !== "string" || !BUILD_EVIDENCE_UUID.test(id))))
+  ) {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("save_build_assignment", {
     p_assignment_id: input.assignmentId ?? null,
@@ -660,8 +1025,19 @@ export async function saveBuildAssignment(input: SaveBuildAssignmentInput) {
     p_sort_order: input.sortOrder ?? 0,
     p_member_ids: input.memberIds ?? [],
   });
-  if (error) throw new Error("Unable to save build assignment.");
-  return data;
+  if (error) throw adminMutationError(error);
+  const result = requireRpcRecord(data);
+  const assignmentId = rpcString(result, "assignment_id");
+  const publicationState = readPublicationState(rpcString(result, "publication_state"));
+  if (
+    !assignmentId
+    || !BUILD_EVIDENCE_UUID.test(assignmentId)
+    || !publicationState
+    || publicationState !== input.publicationState
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return { assignmentId, publicationState };
 }
 
 export async function setBuildMemberDomain(profileId: string, domain: BuildDomain, assigned: boolean) {
@@ -696,15 +1072,510 @@ export async function registerBuildAssignmentAttachment(
   return data;
 }
 
-export async function assignBuildMember(assignmentId: string, memberId: string) {
+export async function uploadBuildAssignmentReference(
+  assignmentId: string,
+  file: File,
+  label: string,
+): Promise<BuildProveReferenceUploadResult> {
   await requireAdmin();
+  if (
+    typeof assignmentId !== "string"
+    || !BUILD_EVIDENCE_UUID.test(assignmentId)
+    || typeof label !== "string"
+    || label.trim().length > 200
+  ) {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
+  let contentType: BuildProveEvidenceMimeType;
+  try {
+    contentType = await validateBuildProveEvidenceFile(file);
+  } catch (error) {
+    if (error instanceof BuildProveEvidenceValidationError) {
+      throw new BuildProveAdminMutationError("invalid_input");
+    }
+    throw error;
+  }
+
+  const extensionByType: Record<BuildProveEvidenceMimeType, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "application/pdf": "pdf",
+  };
+  const storagePath = `assignments/${assignmentId}/${randomUUID()}.${extensionByType[contentType]}`;
+  const supabase = await createClient();
+  const { error: uploadError } = await supabase.storage
+    .from(BUILD_PROVE_PRIVATE_BUCKET)
+    .upload(storagePath, file, { contentType, upsert: false });
+  if (uploadError) throw new BuildProveAdminMutationError("failed");
+
+  const { data, error } = await supabase.rpc("add_build_assignment_attachment", {
+    p_assignment_id: assignmentId,
+    p_storage_path: storagePath,
+    p_content_type: contentType,
+    p_file_size: file.size,
+    p_label: label.trim(),
+  });
+  const cleanupUploadedObject = async () => {
+    const { error: cleanupError } = await supabase.storage
+      .from(BUILD_PROVE_PRIVATE_BUCKET)
+      .remove([storagePath]);
+    if (cleanupError) {
+      console.error("build_prove_reference_cleanup_failed", { diagnosticId: randomUUID() });
+    }
+  };
+  if (error) {
+    await cleanupUploadedObject();
+    throw adminMutationError(error);
+  }
+  let result: { [key: string]: Json | undefined };
+  try {
+    result = requireRpcRecord(data);
+  } catch (error) {
+    await cleanupUploadedObject();
+    throw error;
+  }
+  const attachmentId = rpcString(result, "attachment_id");
+  if (!attachmentId || !BUILD_EVIDENCE_UUID.test(attachmentId)) {
+    await cleanupUploadedObject();
+    throw new BuildProveQueryError();
+  }
+  return { attachmentId };
+}
+
+export async function assignBuildMember(
+  assignmentId: string,
+  memberId: string,
+): Promise<AssignBuildMemberResult> {
+  await requireAdmin();
+  if (
+    typeof assignmentId !== "string"
+    || !BUILD_EVIDENCE_UUID.test(assignmentId)
+    || typeof memberId !== "string"
+    || !BUILD_EVIDENCE_UUID.test(memberId)
+  ) {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("assign_build_member", {
     p_assignment_id: assignmentId,
     p_member_id: memberId,
   });
-  if (error) throw new Error("Unable to assign build work.");
-  return data;
+  if (error) throw adminMutationError(error);
+  const result = requireRpcRecord(data);
+  const resultAssignmentId = rpcString(result, "assignment_id");
+  const resultMemberId = rpcString(result, "member_id");
+  const created = rpcBoolean(result, "created");
+  if (
+    resultAssignmentId !== assignmentId
+    || resultMemberId !== memberId
+    || created === null
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return { assignmentId: resultAssignmentId, memberId: resultMemberId, created };
+}
+
+export async function assignBuildMembersBulk(
+  assignmentId: string,
+  memberIds: string[],
+): Promise<SaveBuildAssignmentResult> {
+  await requireAdmin();
+  if (
+    typeof assignmentId !== "string"
+    || !BUILD_EVIDENCE_UUID.test(assignmentId)
+    || !Array.isArray(memberIds)
+    || memberIds.length === 0
+    || memberIds.some((id) => typeof id !== "string" || !BUILD_EVIDENCE_UUID.test(id))
+    || new Set(memberIds).size !== memberIds.length
+  ) {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
+  const supabase = await createClient();
+  const { data: assignment, error } = await supabase.from("build_assignments")
+    .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, sort_order, created_at, updated_at")
+    .eq("id", assignmentId)
+    .maybeSingle();
+  if (error) throw new BuildProveQueryError();
+  if (!assignment) throw new BuildProveAdminMutationError("not_found");
+  const task = mapTask(assignment);
+  if (task.publicationState !== "published") {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
+  return saveBuildAssignment({
+    assignmentId: task.id,
+    slug: task.slug,
+    title: task.title,
+    summary: task.summary,
+    objective: task.objective,
+    difficulty: task.difficulty,
+    domain: task.domain,
+    assignmentScope: task.assignmentScope,
+    publicationState: task.publicationState,
+    deadlineAt: task.deadlineAt,
+    priority: task.priority,
+    requirements: task.requirements,
+    deliverables: task.deliverables,
+    submissionRequirements: task.submissionRequirements,
+    evaluationCriteria: task.evaluationCriteria,
+    rewardPoints: task.rewardPoints,
+    sortOrder: assignment.sort_order,
+    memberIds,
+  });
+}
+
+export async function getAdminBuildProveAssignableMembers(
+  assignmentId: string,
+): Promise<BuildProveAssignableMember[]> {
+  await requireAdmin();
+  if (typeof assignmentId !== "string" || !BUILD_EVIDENCE_UUID.test(assignmentId)) {
+    throw new BuildProveValidationError();
+  }
+  const supabase = await createClient();
+  const { data: assignment, error: assignmentError } = await supabase.from("build_assignments")
+    .select("id, domain, assignment_scope")
+    .eq("id", assignmentId)
+    .maybeSingle();
+  if (assignmentError) throw new BuildProveQueryError();
+  if (!assignment) throw new BuildProveValidationError();
+
+  let eligibleProfileIds: string[] | null = null;
+  if (assignment.assignment_scope === "domain") {
+    const domains = await fetchAllPages((from, to) =>
+      supabase.from("build_member_domains")
+        .select("profile_id")
+        .eq("domain", assignment.domain)
+        .range(from, to));
+    eligibleProfileIds = [...new Set(domains.map(({ profile_id }) => profile_id))];
+  } else if (assignment.assignment_scope !== "individual") {
+    throw new BuildProveQueryError();
+  }
+
+  const [profiles, workItems] = await Promise.all([
+    (async () => {
+      const rows: BuildProfileRow[] = [];
+      for (const idsChunk of chunked(eligibleProfileIds ?? [])) {
+        rows.push(...await fetchAllPages((from, to) =>
+          supabase.from("profiles")
+            .select("id, full_name, handle")
+            .in("id", idsChunk)
+            .order("full_name", { ascending: true })
+            .range(from, to)));
+      }
+      if (eligibleProfileIds !== null) return rows;
+      return fetchAllPages((from, to) =>
+        supabase.from("profiles")
+          .select("id, full_name, handle")
+          .order("full_name", { ascending: true })
+          .range(from, to));
+    })(),
+    fetchAllPages((from, to) =>
+      supabase.from("build_assignment_members")
+        .select("member_id, status")
+        .eq("assignment_id", assignmentId)
+        .range(from, to)),
+  ]);
+  const statusByMember = new Map(workItems.map((item) => [item.member_id, readStatus(item.status)]));
+  return profiles.map((profile) => ({
+    id: profile.id,
+    fullName: profile.full_name,
+    handle: profile.handle,
+    existingStatus: statusByMember.get(profile.id) ?? null,
+  }));
+}
+
+async function registerBuildDraftEvidenceWithContext(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  draftId: string,
+  objectId: string,
+  caption: string,
+): Promise<BuildProveEvidenceMetadata> {
+  const { data, error } = await supabase.rpc("register_build_draft_evidence", {
+    p_draft_id: draftId,
+    p_object_uuid: objectId,
+    p_caption: caption,
+  });
+  if (error) throw rpcOperationError(error, "evidence_registration_failed");
+  const result = requireRpcRecord(data);
+  const evidenceId = rpcString(result, "evidence_id");
+  const contentType = rpcString(result, "content_type");
+  const fileSize = rpcNumber(result, "file_size");
+  const registeredCaption = rpcString(result, "caption");
+  const createdAt = rpcString(result, "created_at");
+  if (
+    !evidenceId
+    || !BUILD_EVIDENCE_UUID.test(evidenceId)
+    || !contentType
+    || !isBuildProveEvidenceMimeType(contentType)
+    || fileSize === null
+    || registeredCaption === null
+    || createdAt === null
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return {
+    id: evidenceId,
+    contentType,
+    fileSize,
+    caption: registeredCaption,
+    createdAt,
+  };
+}
+
+export async function uploadBuildDraftEvidence(
+  draftId: string,
+  file: File,
+  caption = "",
+): Promise<BuildProveEvidenceMetadata> {
+  const { memberId, supabase } = await requireMemberContext();
+  if (!BUILD_EVIDENCE_UUID.test(draftId) || caption.trim().length > 500) {
+    throw new BuildProveEvidenceOperationError("invalid_input");
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("build_submission_drafts")
+    .select("id, member_id, state")
+    .eq("id", draftId)
+    .eq("member_id", memberId)
+    .maybeSingle();
+  if (draftError) throw new BuildProveQueryError();
+  if (!draft) throw new BuildProveEvidenceOperationError("draft_unavailable");
+  if (draft.state !== "open") throw new BuildProveEvidenceOperationError("draft_sealed");
+
+  let contentType: BuildProveEvidenceMimeType;
+  try {
+    contentType = await validateBuildProveEvidenceFile(file);
+  } catch (error) {
+    if (error instanceof BuildProveEvidenceValidationError) {
+      throw new BuildProveEvidenceOperationError(error.code);
+    }
+    throw new BuildProveEvidenceOperationError("invalid_file");
+  }
+
+  const objectId = randomUUID();
+  const storagePath = `submissions/${memberId}/${draft.id}/${objectId}`;
+  const uploadDiagnosticId = randomUUID();
+  let uploadFailed = false;
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from(BUILD_PROVE_PRIVATE_BUCKET)
+      .upload(storagePath, file, { contentType, upsert: false });
+    uploadFailed = uploadError !== null;
+  } catch {
+    uploadFailed = true;
+  }
+  if (uploadFailed) {
+    console.error("build_prove_evidence_storage_upload_failed", {
+      diagnosticId: uploadDiagnosticId,
+    });
+    throw new BuildProveEvidenceOperationError("storage_upload_failed", uploadDiagnosticId);
+  }
+
+  try {
+    return await registerBuildDraftEvidenceWithContext(
+      supabase,
+      draft.id,
+      objectId,
+      caption.trim(),
+    );
+  } catch {
+    const diagnosticId = randomUUID();
+    console.error("build_prove_evidence_registration_failed", { diagnosticId });
+    throw new BuildProveEvidenceOperationError("evidence_registration_failed", diagnosticId);
+  }
+}
+
+export async function removeBuildDraftEvidence(evidenceId: string): Promise<void> {
+  const { memberId, supabase } = await requireMemberContext();
+  if (!BUILD_EVIDENCE_UUID.test(evidenceId)) {
+    throw new BuildProveEvidenceOperationError("invalid_input");
+  }
+
+  const { data: evidence, error: evidenceError } = await supabase
+    .from("build_submission_evidence")
+    .select("id, draft_id, submission_id, owner_id, storage_path")
+    .eq("id", evidenceId)
+    .maybeSingle();
+  if (evidenceError) throw new BuildProveQueryError();
+  if (!evidence) throw new BuildProveEvidenceOperationError("evidence_not_found");
+  if (evidence.owner_id !== memberId) throw new BuildProveEvidenceOperationError("forbidden");
+  if (!evidence.draft_id || evidence.submission_id) {
+    throw new BuildProveEvidenceOperationError("draft_sealed");
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("build_submission_drafts")
+    .select("id, work_item_id, member_id, state")
+    .eq("id", evidence.draft_id)
+    .eq("member_id", memberId)
+    .maybeSingle();
+  if (draftError) throw new BuildProveQueryError();
+  if (!draft) throw new BuildProveEvidenceOperationError("draft_unavailable");
+  if (draft.state !== "open") throw new BuildProveEvidenceOperationError("draft_sealed");
+
+  const { data: workItem, error: workItemError } = await supabase
+    .from("build_assignment_members")
+    .select("id, status")
+    .eq("id", draft.work_item_id)
+    .eq("member_id", memberId)
+    .maybeSingle();
+  if (workItemError) throw new BuildProveQueryError();
+  if (!workItem) throw new BuildProveEvidenceOperationError("draft_unavailable");
+  if (workItem.status === "cancelled") throw new BuildProveEvidenceOperationError("cancelled");
+  if (!["in_progress", "changes_requested"].includes(workItem.status)) {
+    throw new BuildProveEvidenceOperationError("draft_sealed");
+  }
+
+  const diagnosticId = randomUUID();
+  // The Storage delete policy requires the registered evidence row to still exist.
+  const { error: storageError } = await supabase.storage
+    .from(BUILD_PROVE_PRIVATE_BUCKET)
+    .remove([evidence.storage_path]);
+  if (storageError) {
+    console.error("build_prove_evidence_storage_delete_failed", { diagnosticId });
+    throw new BuildProveEvidenceOperationError("storage_delete_failed", diagnosticId);
+  }
+
+  const { error: removalError } = await supabase.rpc("remove_build_draft_evidence", {
+    p_evidence_id: evidence.id,
+  });
+  if (removalError) {
+    console.error("build_prove_evidence_metadata_cleanup_failed", { diagnosticId });
+    throw new BuildProveEvidenceOperationError("evidence_cleanup_required", diagnosticId);
+  }
+}
+
+export type BuildProveEvidenceDownload = {
+  body: Blob;
+  contentType: BuildProveEvidenceMimeType;
+  fileSize: number;
+};
+
+export async function downloadBuildEvidence(
+  evidenceId: string,
+): Promise<BuildProveEvidenceDownload> {
+  const { memberId, supabase } = await requireMemberContext();
+  if (!BUILD_EVIDENCE_UUID.test(evidenceId)) {
+    throw new BuildProveEvidenceOperationError("invalid_input");
+  }
+  const { data: admin, error: adminError } = await supabase.rpc("is_admin");
+  if (adminError) throw new BuildProveQueryError();
+
+  const { data: evidence, error: evidenceError } = await supabase
+    .from("build_submission_evidence")
+    .select("id, draft_id, submission_id, owner_id, storage_path, content_type, file_size")
+    .eq("id", evidenceId)
+    .maybeSingle();
+  if (evidenceError) throw new BuildProveQueryError();
+  if (!evidence) throw new BuildProveEvidenceOperationError("evidence_not_found");
+  if (!admin && evidence.owner_id !== memberId) {
+    throw new BuildProveEvidenceOperationError("forbidden");
+  }
+  if (!isBuildProveEvidenceMimeType(evidence.content_type)
+    || evidence.file_size < 1
+    || evidence.file_size > 10 * 1024 * 1024) {
+    throw new BuildProveQueryError();
+  }
+
+  let workItemId: string;
+  if (evidence.draft_id && !evidence.submission_id) {
+    const { data: draft, error: draftError } = await supabase
+      .from("build_submission_drafts")
+      .select("id, work_item_id, member_id, state")
+      .eq("id", evidence.draft_id)
+      .maybeSingle();
+    if (draftError) throw new BuildProveQueryError();
+    if (!draft || draft.member_id !== evidence.owner_id || draft.state !== "open") {
+      throw new BuildProveEvidenceOperationError("evidence_not_found");
+    }
+    workItemId = draft.work_item_id;
+  } else if (evidence.submission_id && !evidence.draft_id) {
+    const { data: submission, error: submissionError } = await supabase
+      .from("build_submissions")
+      .select("id, work_item_id, member_id")
+      .eq("id", evidence.submission_id)
+      .maybeSingle();
+    if (submissionError) throw new BuildProveQueryError();
+    if (!submission || submission.member_id !== evidence.owner_id) {
+      throw new BuildProveEvidenceOperationError("evidence_not_found");
+    }
+    workItemId = submission.work_item_id;
+  } else {
+    throw new BuildProveQueryError();
+  }
+
+  const { data: workItem, error: workItemError } = await supabase
+    .from("build_assignment_members")
+    .select("id, member_id, status")
+    .eq("id", workItemId)
+    .maybeSingle();
+  if (workItemError) throw new BuildProveQueryError();
+  if (!workItem || workItem.member_id !== evidence.owner_id) {
+    throw new BuildProveEvidenceOperationError("evidence_not_found");
+  }
+  if (!admin && (evidence.owner_id !== memberId || workItem.status === "cancelled")) {
+    throw new BuildProveEvidenceOperationError("forbidden");
+  }
+  if (evidence.draft_id
+    && !["in_progress", "changes_requested"].includes(workItem.status)) {
+    throw new BuildProveEvidenceOperationError(
+      workItem.status === "cancelled" ? "cancelled" : "draft_sealed",
+    );
+  }
+
+  const { data: body, error: downloadError } = await supabase.storage
+    .from(BUILD_PROVE_PRIVATE_BUCKET)
+    .download(evidence.storage_path);
+  if (downloadError && ("status" in downloadError && downloadError.status === 404)) {
+    throw new BuildProveEvidenceOperationError("storage_object_missing");
+  }
+  if (downloadError || !body) throw new BuildProveQueryError();
+  return {
+    body,
+    contentType: evidence.content_type,
+    fileSize: evidence.file_size,
+  };
+}
+
+export type BuildProveReferenceDownload = {
+  body: Blob;
+  contentType: string;
+  fileSize: number;
+};
+
+export async function downloadBuildAssignmentReference(
+  attachmentId: string,
+): Promise<BuildProveReferenceDownload | null> {
+  const { memberId, supabase } = await requireMemberContext();
+  if (!BUILD_EVIDENCE_UUID.test(attachmentId)) return null;
+
+  const { data: attachment, error: attachmentError } = await supabase
+    .from("build_assignment_attachments")
+    .select("id, assignment_id, storage_path, content_type, file_size")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (attachmentError) throw new BuildProveQueryError();
+  if (!attachment) return null;
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("build_assignment_members")
+    .select("id, status")
+    .eq("assignment_id", attachment.assignment_id)
+    .eq("member_id", memberId)
+    .neq("status", "cancelled")
+    .maybeSingle();
+  if (membershipError) throw new BuildProveQueryError();
+  if (!membership) return null;
+
+  const { data: body, error: downloadError } = await supabase.storage
+    .from(BUILD_PROVE_PRIVATE_BUCKET)
+    .download(attachment.storage_path);
+  if (downloadError || !body) throw new BuildProveQueryError();
+  return {
+    body,
+    contentType: attachment.content_type,
+    fileSize: attachment.file_size,
+  };
 }
 
 export async function startBuildAssignment(workItemId: string) {
@@ -717,49 +1588,28 @@ export async function startBuildAssignment(workItemId: string) {
 }
 
 export async function submitBuildWork(input: SubmitBuildWorkInput) {
-  const supabase = await requireMember();
-  const { data, error } = await supabase.rpc("submit_build_work", {
-    p_work_item_id: input.workItemId,
-    p_project_title: input.projectTitle,
-    p_explanation: input.explanation,
-    p_approach: input.approach,
-    p_technologies: input.technologies ?? [],
-    p_challenges: input.challenges ?? "",
-    p_learnings: input.learnings ?? "",
-    p_future_improvements: input.futureImprovements ?? "",
-    p_repository_url: input.repositoryUrl ?? undefined,
-    p_deployment_url: input.deploymentUrl ?? undefined,
-    p_demo_url: input.demoUrl ?? undefined,
-  });
-  if (error) throw new Error("Unable to submit build work.");
-  return data;
+  const draft = await saveBuildSubmissionDraft(input);
+  return submitBuildSubmissionDraft(draft.draftId);
 }
 
 export async function resubmitBuildWork(input: SubmitBuildWorkInput) {
-  const supabase = await requireMember();
-  const { data, error } = await supabase.rpc("resubmit_build_work", {
-    p_work_item_id: input.workItemId,
-    p_project_title: input.projectTitle,
-    p_explanation: input.explanation,
-    p_approach: input.approach,
-    p_technologies: input.technologies ?? [],
-    p_challenges: input.challenges ?? "",
-    p_learnings: input.learnings ?? "",
-    p_future_improvements: input.futureImprovements ?? "",
-    p_repository_url: input.repositoryUrl ?? undefined,
-    p_deployment_url: input.deploymentUrl ?? undefined,
-    p_demo_url: input.demoUrl ?? undefined,
-  });
-  if (error) throw new Error("Unable to resubmit build work.");
-  return data;
+  return submitBuildWork(input);
 }
 
 export async function reviewBuildSubmission(
   submissionId: string,
   decision: BuildReviewDecision,
   feedback = "",
-) {
+): Promise<{
+  status: BuildReviewDecision;
+  idempotent: boolean;
+  rewardStatus: "awarded" | "already_awarded" | "not_awarded" | "not_applicable";
+  pointsAwarded: number;
+}> {
   await requireAdmin();
+  if (!BUILD_EVIDENCE_UUID.test(submissionId)) {
+    throw new BuildProveValidationError();
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("review_build_submission", {
     p_submission_id: submissionId,
@@ -767,17 +1617,51 @@ export async function reviewBuildSubmission(
     p_feedback: feedback,
   });
   if (error) throw new Error("Unable to review build submission.");
-  return data;
+  const result = requireRpcRecord(data);
+  const resultSubmissionId = rpcString(result, "submission_id");
+  const status = rpcString(result, "status");
+  const idempotent = rpcBoolean(result, "idempotent");
+  const rewardStatus = rpcString(result, "reward_status");
+  const pointsAwarded = rpcNumber(result, "points_awarded");
+  if (
+    resultSubmissionId !== submissionId
+    || (status !== "approved" && status !== "changes_requested")
+    || status !== decision
+    || idempotent === null
+    || (
+      rewardStatus !== "awarded"
+      && rewardStatus !== "already_awarded"
+      && rewardStatus !== "not_awarded"
+      && rewardStatus !== "not_applicable"
+    )
+    || pointsAwarded === null
+    || !Number.isInteger(pointsAwarded)
+    || pointsAwarded < 0
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return { status, idempotent, rewardStatus, pointsAwarded };
 }
 
-export async function cancelBuildWorkItem(workItemId: string) {
+export async function cancelBuildWorkItem(
+  workItemId: string,
+): Promise<CancelBuildWorkItemResult> {
   await requireAdmin();
+  if (typeof workItemId !== "string" || !BUILD_EVIDENCE_UUID.test(workItemId)) {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("cancel_build_work_item", {
     p_work_item_id: workItemId,
   });
-  if (error) throw new Error("Unable to cancel build work.");
-  return data;
+  if (error) throw adminMutationError(error);
+  const result = requireRpcRecord(data);
+  const status = rpcString(result, "status");
+  const idempotent = rpcBoolean(result, "idempotent");
+  if (status !== "cancelled" || idempotent === null) {
+    throw new BuildProveQueryError();
+  }
+  return { status, idempotent };
 }
 
 export async function getMemberBuildProveDomains(): Promise<BuildProveDomain[]> {
@@ -849,16 +1733,27 @@ export async function getMemberBuildProveTaskDetail(
 
   const { data: assignment, error: assignmentError } = await supabase
     .from("build_assignments")
-    .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, created_at, updated_at")
+    .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, sort_order, created_at, updated_at")
     .eq("id", workItem.assignment_id)
     .maybeSingle();
   if (assignmentError) throw new BuildProveQueryError();
   if (!assignment) throw new BuildProveQueryError();
 
-  const [references, submissions] = await Promise.all([
+  const status = readStatus(workItem.status);
+  const [references, submissions, rewardResult] = await Promise.all([
     loadReferences(supabase, [assignment.id]),
     loadSubmissions(supabase, [workItem.id]),
+    status === "approved"
+      ? supabase.from("build_submission_rewards")
+        .select("points_awarded")
+        .eq("work_item_id", workItem.id)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
+  if (rewardResult.error) throw new BuildProveQueryError();
+  const openDraft = ["in_progress", "changes_requested"].includes(status)
+    ? await loadOpenSubmissionDraft(supabase, workItem.id)
+    : null;
   const submissionIds = submissions.map((submission) => submission.id);
   const [reviews, evidence] = await Promise.all([
     loadReviews(supabase, submissionIds),
@@ -873,11 +1768,13 @@ export async function getMemberBuildProveTaskDetail(
       id: workItem.id,
       assignedBy: workItem.assigned_by,
       assignedAt: workItem.assigned_at,
-      status: readStatus(workItem.status),
+      status,
       rewardPointsSnapshot: workItem.reward_points_snapshot,
+      rewardPointsAwarded: rewardResult.data?.points_awarded ?? null,
       updatedAt: workItem.updated_at,
     },
     referenceAttachments: references.map(mapReference),
+    openDraft,
     latestSubmission: revisions.at(-1) ?? null,
     revisionHistory: revisions,
   };
@@ -886,24 +1783,33 @@ export async function getMemberBuildProveTaskDetail(
 export async function getAdminBuildProveOverview(): Promise<BuildProveAdminOverview> {
   await requireAdmin();
   const supabase = await createClient();
-  const [totalResult, activeResult, reviewResult, changesResult, approvedResult, overdueItems] =
-    await Promise.all([
-      supabase.from("build_assignments").select("id", { count: "exact", head: true }),
-      supabase.from("build_assignments").select("id", { count: "exact", head: true })
-        .eq("publication_state", "published"),
-      supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
-        .in("status", ["submitted", "resubmitted"]),
-      supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
-        .eq("status", "changes_requested"),
-      supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
-        .eq("status", "approved"),
-      fetchAllPages((from, to) =>
-        supabase.from("build_assignment_members")
-          .select("id, assignment_id, member_id, assigned_by, assigned_at, status, reward_points_snapshot, updated_at")
-          .in("status", ACTIVE_STATUSES)
-          .range(from, to)),
-    ]);
-  if (totalResult.error || activeResult.error || reviewResult.error || changesResult.error || approvedResult.error) {
+  const [totalResult, publishedResult, draftResult, archivedResult, assignedResult,
+    reviewResult, changesResult, approvedResult, cancelledResult, overdueItems] = await Promise.all([
+    supabase.from("build_assignments").select("id", { count: "exact", head: true }),
+    supabase.from("build_assignments").select("id", { count: "exact", head: true })
+      .eq("publication_state", "published"),
+    supabase.from("build_assignments").select("id", { count: "exact", head: true })
+      .eq("publication_state", "draft"),
+    supabase.from("build_assignments").select("id", { count: "exact", head: true })
+      .eq("publication_state", "archived"),
+    supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
+      .eq("status", "assigned"),
+    supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
+      .in("status", ["submitted", "resubmitted"]),
+    supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
+      .eq("status", "changes_requested"),
+    supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
+      .eq("status", "approved"),
+    supabase.from("build_assignment_members").select("id", { count: "exact", head: true })
+      .eq("status", "cancelled"),
+    fetchAllPages((from, to) =>
+      supabase.from("build_assignment_members")
+        .select("id, assignment_id, member_id, assigned_by, assigned_at, status, reward_points_snapshot, updated_at")
+        .in("status", ACTIVE_STATUSES)
+        .range(from, to)),
+  ]);
+  if ([totalResult, publishedResult, draftResult, archivedResult, assignedResult, reviewResult,
+    changesResult, approvedResult, cancelledResult].some((result) => result.error)) {
     throw new BuildProveQueryError();
   }
   const activeWorkItems = overdueItems.filter((item) => ACTIVE_STATUSES.includes(readStatus(item.status)));
@@ -917,10 +1823,20 @@ export async function getAdminBuildProveOverview(): Promise<BuildProveAdminOverv
       && assignment?.deadline_at !== undefined
       && new Date(assignment.deadline_at).getTime() < Date.now();
   }).length;
+  const publishedTasks = publishedResult.count ?? 0;
+  const reviewQueueCount = reviewResult.count ?? 0;
   return {
     totalTasks: totalResult.count ?? 0,
-    activeTasks: activeResult.count ?? 0,
-    awaitingReview: reviewResult.count ?? 0,
+    publishedTasks,
+    unpublishedTasks: (draftResult.count ?? 0) + (archivedResult.count ?? 0),
+    draftTasks: draftResult.count ?? 0,
+    archivedTasks: archivedResult.count ?? 0,
+    assignedWorkItems: assignedResult.count ?? 0,
+    submittedWorkItems: reviewQueueCount,
+    cancelledWorkItems: cancelledResult.count ?? 0,
+    reviewQueueCount,
+    activeTasks: publishedTasks,
+    awaitingReview: reviewQueueCount,
     changesRequested: changesResult.count ?? 0,
     approved: approvedResult.count ?? 0,
     overdue,
@@ -935,12 +1851,18 @@ export async function getAdminBuildProveTasks(
   if (filters.memberId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.memberId)) {
     throw new BuildProveValidationError();
   }
+  if (filters.publicationState !== undefined
+    && !readPublicationState(filters.publicationState)) {
+    throw new BuildProveValidationError();
+  }
   const supabase = await createClient();
-  const assignments = await fetchAllPages((from, to) =>
-    supabase.from("build_assignments")
-      .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, created_at, updated_at")
-      .order("created_at", { ascending: false })
-      .range(from, to));
+  const assignments = await fetchAllPages((from, to) => {
+    let query = supabase.from("build_assignments")
+      .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, sort_order, created_at, updated_at");
+    if (filters.domain) query = query.eq("domain", filters.domain);
+    if (filters.publicationState) query = query.eq("publication_state", filters.publicationState);
+    return query.order("created_at", { ascending: false }).range(from, to);
+  });
   const assignmentIds = assignments.map((assignment) => assignment.id);
   const workItems: BuildWorkItemRow[] = [];
   for (const idsChunk of chunked(assignmentIds)) {
@@ -966,6 +1888,7 @@ export async function getAdminBuildProveTasks(
     const task = taskById.get(assignment.id);
     const matchingWork = workByAssignment.get(assignment.id) ?? [];
     if (!task || (filters.domain && task.domain !== filters.domain)
+      || (filters.publicationState && task.publicationState !== filters.publicationState)
       || (filters.priority && task.priority !== filters.priority)
       || (search && !`${task.title} ${task.summary}`.toLocaleLowerCase().includes(search))) return false;
     if (filters.overdue === true
@@ -1043,10 +1966,13 @@ export async function getAdminBuildProveTaskDetail(
   assignmentId: string,
 ): Promise<BuildProveAdminTaskDetail | null> {
   await requireAdmin();
+  if (typeof assignmentId !== "string" || !BUILD_EVIDENCE_UUID.test(assignmentId)) {
+    throw new BuildProveValidationError();
+  }
   const supabase = await createClient();
   const { data: assignment, error: assignmentError } = await supabase
     .from("build_assignments")
-    .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, created_at, updated_at")
+    .select("id, slug, title, summary, objective, difficulty, domain, assignment_scope, publication_state, deadline_at, priority, requirements, deliverables, submission_requirements, evaluation_criteria, reward_points, sort_order, created_at, updated_at")
     .eq("id", assignmentId)
     .maybeSingle();
   if (assignmentError) throw new BuildProveQueryError();
@@ -1137,8 +2063,22 @@ export async function getAdminBuildProveReviewQueue(): Promise<BuildProveReviewQ
     })(),
   ]);
   const latestByWorkItem = getLatestRevisions(submissions);
-  const reviews = await loadReviews(supabase, [...latestByWorkItem.values()].map((row) => row.id));
+  const latestRevisions = [...latestByWorkItem.values()];
+  const latestSubmissionIds = latestRevisions.map((row) => row.id);
+  const [reviews, evidence] = await Promise.all([
+    loadReviews(supabase, latestSubmissionIds),
+    loadEvidence(supabase, latestSubmissionIds),
+  ]);
   const reviewedSubmissionIds = new Set(reviews.map((review) => review.submission_id));
+  const evidenceCountBySubmission = new Map<string, number>();
+  for (const item of evidence) {
+    if (item.submission_id) {
+      evidenceCountBySubmission.set(
+        item.submission_id,
+        (evidenceCountBySubmission.get(item.submission_id) ?? 0) + 1,
+      );
+    }
+  }
   const taskById = new Map(assignments.map((assignment) => [assignment.id, mapTask(assignment)]));
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
   return workItems.flatMap((workItem) => {
@@ -1159,6 +2099,10 @@ export async function getAdminBuildProveReviewQueue(): Promise<BuildProveReviewQ
       latestRevisionNumber: latest.revision_number,
       latestSubmissionId: latest.id,
       submittedAt: latest.submitted_at,
+      submissionSummary: latest.explanation.length > 280
+        ? `${latest.explanation.slice(0, 277).trimEnd()}...`
+        : latest.explanation,
+      evidenceCount: evidenceCountBySubmission.get(latest.id) ?? 0,
     }];
   });
 }

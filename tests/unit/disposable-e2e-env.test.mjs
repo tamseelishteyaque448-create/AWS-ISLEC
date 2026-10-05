@@ -171,3 +171,43 @@ test("authenticates non-admin using its own credentials and browser context", ()
 test("keeps .env.e2e.local ignored by git", () => {
   assert.doesNotThrow(() => execFileSync("git", ["check-ignore", "-q", ".env.e2e.local"]));
 });
+
+test(".env.example carries placeholders, never a real project reference", () => {
+  const example = readFileSync(resolve(".env.example"), "utf8");
+
+  // A Supabase project ref is 20 lowercase letters. Shipping one in the public
+  // template means a fresh `cp .env.example .env.local` points a new machine at
+  // someone's real database, which is exactly what AGENTS.md forbids.
+  const projectRefs = example.match(/[a-z]{20}/g) ?? [];
+  assert.deepEqual(
+    projectRefs,
+    [],
+    `.env.example must not contain a Supabase project ref, found: ${projectRefs.join(", ")}`,
+  );
+
+  // Publishable keys are public by design, but the template should still use an
+  // obvious placeholder rather than a working credential.
+  for (const key of example.match(/sb_publishable_[^\s"']+/g) ?? []) {
+    assert.match(
+      key,
+      /replace|your|example|placeholder/i,
+      `.env.example must use an obvious placeholder publishable key, found: ${key}`,
+    );
+  }
+
+  // Never let a secret key slip into the public template. Match the value only,
+  // not the `sb_secret_` name appearing inside explanatory prose.
+  for (const key of example.match(/sb_secret_[^\s"']+/g) ?? []) {
+    assert.match(
+      key,
+      /replace|your|example|placeholder/i,
+      `.env.example must not hold a real secret key, found: ${key}`,
+    );
+  }
+});
+
+test("keeps next-env.d.ts out of version control", () => {
+  // Next.js regenerates this file and rewrites its type imports depending on
+  // whether `next dev` or `next build` ran last, so a tracked copy churns.
+  assert.doesNotThrow(() => execFileSync("git", ["check-ignore", "-q", "next-env.d.ts"]));
+});
