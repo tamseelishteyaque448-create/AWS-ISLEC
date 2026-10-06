@@ -9,7 +9,11 @@ import {
   uploadBuildReferenceAction,
   type BuildProveAdminActionState,
 } from "@/app/admin/build-prove/actions";
-import { BuildProveReviewForm, CancelWorkItemForm } from "@/components/admin/BuildProveReviewForm";
+import {
+  AwardBuildRewardForm,
+  BuildProveReviewForm,
+  CancelWorkItemForm,
+} from "@/components/admin/BuildProveReviewForm";
 import type {
   BuildDomain,
   BuildProveAdminTaskDetail,
@@ -285,6 +289,25 @@ function MemberReview({
     <p className="admin-build-inline-note">
       {workItem.rewardPointsSnapshot} points snapshot · updated {formattedDate(workItem.updatedAt)}
     </p>
+
+    {workItem.status === "approved" && workItem.rewardPointsAwarded != null ? (
+      <p className="admin-build-inline-note" role="status">
+        Reward awarded: {workItem.rewardPointsAwarded} points
+        {workItem.rewardAwardedAt ? ` · ${formattedDate(workItem.rewardAwardedAt)}` : ""}.
+      </p>
+    ) : workItem.status === "approved" ? (
+      <section className="admin-build-review" aria-label="Award approved work reward">
+        <p className="admin-build-inline-note">
+          This approved work is eligible for its configured {workItem.rewardPointsSnapshot}-point
+          reward. Awarding is permanent and uses the existing assignment-time snapshot.
+        </p>
+        <AwardBuildRewardForm
+          assignmentId={assignmentId}
+          workItemId={workItem.id}
+          points={workItem.rewardPointsSnapshot}
+        />
+      </section>
+    ) : null}
 
     {revisionHistory.length === 0
       ? <p className="admin-build-inline-note">No submission has been sent for this member yet.</p>

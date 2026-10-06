@@ -641,10 +641,10 @@ export function BuildProveTaskDetail({ detail }: { detail: Detail }) {
           <div className="build-task-facts">
             <div><span>Deadline</span><strong>{task.deadlineAt ? readableDate(task.deadlineAt) : "No deadline"}</strong></div>
             <div><span>Reward</span><strong>{workItem.status === "approved"
-              ? workItem.rewardPointsAwarded === null
-                ? "No reward recorded"
+              ? workItem.rewardPointsAwarded == null
+                ? `${workItem.rewardPointsSnapshot} points eligible · not yet awarded`
                 : `${workItem.rewardPointsAwarded} points awarded`
-              : `${workItem.rewardPointsSnapshot} points after approval`}</strong></div>
+              : `${workItem.rewardPointsSnapshot} points on approval`}</strong></div>
             <div><span>Difficulty</span><strong>{task.difficulty}</strong></div>
           </div>
         </section>
@@ -700,9 +700,17 @@ export function BuildProveTaskDetail({ detail }: { detail: Detail }) {
         {workItem.status === "approved" && (
           <section className="build-action-note approved">
             <h2>Work approved</h2>
-            <p>{workItem.rewardPointsAwarded === null
-              ? "This task is closed for editing. No reward was recorded for this approval."
-              : `This task is closed for editing. ${workItem.rewardPointsAwarded} points were awarded.`}</p>
+            {workItem.rewardPointsAwarded == null ? (
+              <p>
+                This task is closed for editing. Your {workItem.rewardPointsSnapshot}-point reward
+                is eligible but has not yet been awarded.
+              </p>
+            ) : (
+              <p>
+                This task is closed for editing. {workItem.rewardPointsAwarded} points were awarded
+                {workItem.rewardAwardedAt ? ` on ${readableDate(workItem.rewardAwardedAt)}` : ""}.
+              </p>
+            )}
           </section>
         )}
         {workItem.status === "cancelled" && (

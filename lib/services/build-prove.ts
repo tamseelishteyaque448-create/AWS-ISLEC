@@ -66,6 +66,12 @@ export type CancelBuildWorkItemResult = {
   idempotent: boolean;
 };
 
+export type AwardBuildSubmissionRewardResult = {
+  status: "awarded" | "already_awarded";
+  idempotent: boolean;
+  pointsAwarded: number;
+};
+
 export type BuildProveAdminMutationErrorCode =
   | "forbidden"
   | "not_found"
@@ -326,6 +332,7 @@ export type BuildProveTaskDetail = {
     status: BuildWorkStatus;
     rewardPointsSnapshot: number;
     rewardPointsAwarded?: number | null;
+    rewardAwardedAt?: string | null;
     updatedAt: string;
   };
   referenceAttachments: BuildProveReferenceMetadata[];
@@ -380,7 +387,11 @@ export type BuildProveAdminTaskDetail = {
   task: BuildProveTaskDefinition;
   referenceAttachments: BuildProveReferenceMetadata[];
   members: Array<{
-    workItem: BuildProveTaskDetail["workItem"] & { memberId: string; fullName: string; handle: string };
+    workItem: BuildProveTaskDetail["workItem"] & {
+      memberId: string;
+      fullName: string;
+      handle: string;
+    };
     latestSubmission: BuildProveSubmissionRevision | null;
     revisionHistory: BuildProveSubmissionRevision[];
   }>;
@@ -500,7 +511,9 @@ function adminMutationError(error: { code?: string }): BuildProveAdminMutationEr
   if (error.code === "42501") return new BuildProveAdminMutationError("forbidden");
   if (error.code === "P0002") return new BuildProveAdminMutationError("not_found");
   if (error.code === "22023") return new BuildProveAdminMutationError("invalid_input");
-  if (error.code === "40001") return new BuildProveAdminMutationError("conflict");
+  if (error.code === "40001" || error.code === "PT409") {
+    return new BuildProveAdminMutationError("conflict");
+  }
   return new BuildProveAdminMutationError("failed");
 }
 
@@ -1643,6 +1656,37 @@ export async function reviewBuildSubmission(
   return { status, idempotent, rewardStatus, pointsAwarded };
 }
 
+export async function awardBuildSubmissionReward(
+  workItemId: string,
+): Promise<AwardBuildSubmissionRewardResult> {
+  await requireAdmin();
+  if (typeof workItemId !== "string" || !BUILD_EVIDENCE_UUID.test(workItemId)) {
+    throw new BuildProveAdminMutationError("invalid_input");
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("award_build_submission_reward", {
+    p_work_item_id: workItemId,
+  });
+  if (error) throw adminMutationError(error);
+  const result = requireRpcRecord(data);
+  const resultWorkItemId = rpcString(result, "work_item_id");
+  const status = rpcString(result, "status");
+  const idempotent = rpcBoolean(result, "idempotent");
+  const pointsAwarded = rpcNumber(result, "points_awarded");
+  if (
+    resultWorkItemId !== workItemId
+    || (status !== "awarded" && status !== "already_awarded")
+    || idempotent === null
+    || idempotent !== (status === "already_awarded")
+    || pointsAwarded === null
+    || !Number.isInteger(pointsAwarded)
+    || pointsAwarded < 0
+  ) {
+    throw new BuildProveQueryError();
+  }
+  return { status, idempotent, pointsAwarded };
+}
+
 export async function cancelBuildWorkItem(
   workItemId: string,
 ): Promise<CancelBuildWorkItemResult> {
@@ -1745,7 +1789,7 @@ export async function getMemberBuildProveTaskDetail(
     loadSubmissions(supabase, [workItem.id]),
     status === "approved"
       ? supabase.from("build_submission_rewards")
-        .select("points_awarded")
+        .select("points_awarded, awarded_at")
         .eq("work_item_id", workItem.id)
         .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -1771,6 +1815,7 @@ export async function getMemberBuildProveTaskDetail(
       status,
       rewardPointsSnapshot: workItem.reward_points_snapshot,
       rewardPointsAwarded: rewardResult.data?.points_awarded ?? null,
+      rewardAwardedAt: rewardResult.data?.awarded_at ?? null,
       updatedAt: workItem.updated_at,
     },
     referenceAttachments: references.map(mapReference),
@@ -1989,10 +2034,18 @@ export async function getAdminBuildProveTaskDetail(
   const workItemIds = workItems.map((item) => item.id);
   const submissions = await loadSubmissions(supabase, workItemIds);
   const submissionIds = submissions.map((item) => item.id);
-  const [reviews, evidence] = await Promise.all([
+  const [reviews, evidence, rewards] = await Promise.all([
     loadReviews(supabase, submissionIds),
     loadEvidence(supabase, submissionIds),
+    workItemIds.length
+      ? fetchAllPages((from, to) =>
+        supabase.from("build_submission_rewards")
+          .select("work_item_id, points_awarded, awarded_at")
+          .in("work_item_id", workItemIds)
+          .range(from, to))
+      : Promise.resolve([]),
   ]);
+  const rewardByWorkItem = new Map(rewards.map((reward) => [reward.work_item_id, reward]));
   const revisionsByWorkItem = new Map<string, BuildProveSubmissionRevision[]>();
   for (const submission of submissions) {
     const revisions = revisionsByWorkItem.get(submission.work_item_id) ?? [];
@@ -2021,6 +2074,8 @@ export async function getAdminBuildProveTaskDetail(
         assignedAt: workItem.assigned_at,
         status: readStatus(workItem.status),
         rewardPointsSnapshot: workItem.reward_points_snapshot,
+        rewardPointsAwarded: rewardByWorkItem.get(workItem.id)?.points_awarded ?? null,
+        rewardAwardedAt: rewardByWorkItem.get(workItem.id)?.awarded_at ?? null,
         updatedAt: workItem.updated_at,
         memberId: workItem.member_id,
         fullName: profile.full_name,

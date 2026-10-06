@@ -7,6 +7,7 @@ import {
   BuildProveAdminMutationError,
   BuildProveQueryError,
   BuildProveValidationError,
+  awardBuildSubmissionReward,
   assignBuildMember,
   assignBuildMembersBulk,
   cancelBuildWorkItem,
@@ -292,7 +293,11 @@ export async function reviewBuildSubmissionAction(
       message: result.idempotent
         ? "This revision was already reviewed. No duplicate review was added."
         : decision === "approved"
-          ? "Submission approved. The review is recorded permanently."
+          ? result.rewardStatus === "awarded"
+            ? `Submission approved and ${result.pointsAwarded} reward points were awarded.`
+            : result.rewardStatus === "already_awarded"
+              ? `Submission approved. Its ${result.pointsAwarded} point reward was already recorded.`
+              : "Submission approved. No reward was recorded for this approval."
           : "Changes requested. The member can now revise and resubmit.",
     };
   } catch (error) {
@@ -309,6 +314,53 @@ export async function reviewBuildSubmissionAction(
       status: "error",
       message: "The review could not be recorded. The submission may have changed since it loaded.",
     };
+  }
+}
+
+export async function awardBuildRewardAction(
+  _previousState: BuildProveAdminActionState,
+  formData: FormData,
+): Promise<BuildProveAdminActionState> {
+  const workItemId = formData.get("workItemId");
+  const assignmentId = formData.get("assignmentId");
+  if (typeof workItemId !== "string" || !UUID_PATTERN.test(workItemId)) {
+    return { status: "error", message: "The approved work item could not be identified." };
+  }
+  if (formData.get("confirmAward") !== "yes") {
+    return { status: "error", message: "Confirm the configured reward before awarding it." };
+  }
+
+  try {
+    const result = await awardBuildSubmissionReward(workItemId);
+    if (typeof assignmentId === "string" && UUID_PATTERN.test(assignmentId)) {
+      revalidatePath(`/admin/build-prove/tasks/${assignmentId}`);
+    }
+    revalidatePath("/admin/build-prove");
+    revalidatePath("/member/activities");
+    revalidatePath("/member/leaderboard");
+    revalidatePath(`/member/learn/tasks/${workItemId}`);
+    return {
+      status: "success",
+      message: result.idempotent
+        ? `${result.pointsAwarded} reward points were already awarded. No duplicate was created.`
+        : `${result.pointsAwarded} reward points were awarded.`,
+    };
+  } catch (error) {
+    if (error instanceof BuildProveAdminMutationError) {
+      return {
+        status: "error",
+        message: error.code === "conflict"
+          ? "This work item is no longer eligible for a reward. Refresh to see its current state."
+          : mutationMessage(error),
+      };
+    }
+    if (error instanceof BuildProveQueryError || error instanceof BuildProveValidationError) {
+      return {
+        status: "error",
+        message: "The reward could not be recorded. Refresh and verify the approved work item.",
+      };
+    }
+    return { status: "error", message: "The reward could not be recorded. Refresh and try again." };
   }
 }
 

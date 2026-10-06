@@ -48,6 +48,7 @@ const TYPE_LABEL: Record<string, string> = {
   project: "Project",
   badge: "Badge",
   lesson: "Lesson",
+  build_prove: "Build & Prove",
 };
 
 // ---------------------------------------------------------------------------

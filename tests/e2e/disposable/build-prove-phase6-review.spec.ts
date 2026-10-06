@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "./fixtures/roles";
 import { expectLocalDisposableTarget } from "./fixtures/target";
 
@@ -8,6 +12,7 @@ test.describe.configure({ timeout: 300_000 });
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 type LocalRole = "ADMIN" | "CONTRIBUTOR" | "NON_ADMIN";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function localRoleClient(role: LocalRole) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,6 +32,52 @@ function rpcRecord(value: unknown): Record<string, unknown> {
     throw new Error("Expected an object from the local Build & Prove RPC.");
   }
   return value as Record<string, unknown>;
+}
+
+function seedLegacyApprovedWorkItem(
+  adminId: string,
+  workItemId: string,
+  submissionId: string,
+) {
+  if (![adminId, workItemId, submissionId].every((id) => UUID_PATTERN.test(id))) {
+    throw new Error("Legacy reward fixture requires UUID identifiers.");
+  }
+  const sql = `with actor as materialized (
+    select set_config('request.jwt.claim.sub', '${adminId}', true)
+  ), approved as (
+    update public.build_assignment_members
+    set status = 'approved', updated_at = timezone('utc', now())
+    where id = '${workItemId}' and status = 'submitted'
+    returning id
+  ), inserted_review as (
+    insert into public.build_submission_reviews(
+      submission_id, work_item_id, reviewer_id, decision, feedback
+    )
+    select '${submissionId}', approved.id, '${adminId}', 'approved', 'Local legacy approval fixture.'
+    from approved cross join actor
+    returning id
+  )
+  select count(*) as inserted_reviews from inserted_review`;
+  const tempDir = mkdtempSync(join(tmpdir(), "build-prove-sql-"));
+  const tempSqlPath = join(tempDir, "legacy-approval.sql");
+  writeFileSync(tempSqlPath, sql, "utf8");
+  try {
+    const output = execFileSync(
+      process.platform === "win32" ? "npx.cmd" : "npx",
+      ["supabase", "db", "query", "--local", "--file", tempSqlPath],
+      {
+        encoding: "utf8",
+        shell: process.platform === "win32",
+        timeout: 30_000,
+        windowsHide: true,
+      },
+    );
+    if (!output.includes('"inserted_reviews": 1')) {
+      throw new Error("Local legacy approval fixture was not created exactly once.");
+    }
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 async function signIn(client: ReturnType<typeof localRoleClient>, role: LocalRole) {
@@ -81,6 +132,7 @@ async function createTask(
 async function submitThroughRpc(
   member: ReturnType<typeof localRoleClient>,
   workItemId: string,
+  projectTitle = "Cancelled work submission",
 ) {
   const { error: startError } = await member.rpc("start_build_assignment", {
     p_work_item_id: workItemId,
@@ -88,7 +140,7 @@ async function submitThroughRpc(
   expect(startError, "Member must start the assigned work through its RPC").toBeNull();
   const { data: draftData, error: draftError } = await member.rpc("save_build_submission_draft", {
     p_work_item_id: workItemId,
-    p_project_title: "Cancelled work submission",
+    p_project_title: projectTitle,
     p_explanation: "This submission exists only to verify cancellation blocks review.",
     p_approach: "Created using the member-owned draft RPC.",
   });
@@ -105,6 +157,7 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
   adminPage,
   contributorPage,
   nonAdminPage,
+  page,
 }) => {
   await Promise.all([
     expectLocalDisposableTarget(adminPage),
@@ -124,8 +177,12 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
   const slug = `phase-6-review-${testKey}`;
   const cancelledTaskTitle = `Phase 6 cancelled ${testKey.slice(-8)}`;
   const cancelledSlug = `phase-6-cancelled-${testKey}`;
+  const legacyTaskTitle = `Phase 7B legacy reward ${testKey.slice(-8)}`;
+  const revisionTwoTitle = `Revision two ${testKey.slice(-8)}`;
+  const legacySlug = `phase-7b-legacy-reward-${testKey}`;
   const taskIds: string[] = [];
   const submissionIds: string[] = [];
+  const workItemIds: string[] = [];
   let mainWorkItemId: string | null = null;
 
   console.log(`PHASE6_TASK_SLUG=${slug}`);
@@ -139,6 +196,8 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     ]);
     expect(adminId).not.toBe(memberId);
     expect(nonAdminId).not.toBe(adminId);
+    await page.goto("/");
+    await expectLocalDisposableTarget(page);
     const { data: initialProfile, error: initialProfileError } = await admin
       .from("profiles")
       .select("points")
@@ -162,11 +221,36 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     const mainTask = await createTask(admin, memberId, taskTitle, slug);
     taskIds.push(mainTask.assignmentId);
     mainWorkItemId = mainTask.workItemId;
+    workItemIds.push(mainTask.workItemId);
     console.log(`PHASE6_TASK_ID=${mainTask.assignmentId}`);
     console.log(`PHASE6_WORK_ITEM_ID=${mainTask.workItemId}`);
+    const { error: assignedAwardError } = await admin.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(assignedAwardError?.code).toBe("PT409");
+    const { error: assignedMemberAwardError } = await member.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(assignedMemberAwardError?.code).toBe("42501");
+    const { error: assignedNonAdminAwardError } = await nonAdmin.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(assignedNonAdminAwardError?.code).toBe("42501");
+    const { error: assignedAnonymousAwardError } = await anonymous.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(assignedAnonymousAwardError?.code).toBe("42501");
+    await page.goto(`/admin/build-prove/tasks/${mainTask.assignmentId}`);
+    await expect(page).toHaveURL(/\/join\?mode=login&next=/);
+    await nonAdminPage.goto(`/admin/build-prove/tasks/${mainTask.assignmentId}`);
+    await expect(nonAdminPage).toHaveURL(/\/member$/);
 
     await contributorPage.goto(`/member/learn/tasks/${mainTask.workItemId}`);
     await contributorPage.getByRole("button", { name: "Start work" }).click({ timeout: 10_000 });
+    const { error: inProgressAwardError } = await admin.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(inProgressAwardError?.code).toBe("PT409");
     await contributorPage.getByLabel("Submission title").fill("Revision one");
     await contributorPage.getByLabel("Description / note").fill("Initial explanation awaiting review.");
     await contributorPage.getByLabel("Approach").fill("A concise first attempt.");
@@ -191,6 +275,10 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
         .single();
       return error ? "error" : data.status;
     }, { timeout: 30_000 }).toBe("submitted");
+    const { error: submittedAwardError } = await admin.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(submittedAwardError?.code).toBe("PT409");
     await contributorPage.reload();
     await expect(
       contributorPage.getByText("Your submitted revision is read-only and awaiting review."),
@@ -254,6 +342,10 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     await expect(revisionOneReview.getByText(
       "Please add one concrete example and explain why it supports the result.",
     )).toBeVisible();
+    const { error: changesRequestedAwardError } = await admin.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(changesRequestedAwardError?.code).toBe("PT409");
 
     await contributorPage.reload();
     await expect(contributorPage.getByRole("heading", { name: "Reviewer feedback" })).toBeVisible();
@@ -261,7 +353,7 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       "Please add one concrete example and explain why it supports the result.",
     )).toBeVisible();
     await expect(contributorPage.getByLabel("Submission title")).toHaveValue("Revision one");
-    await contributorPage.getByLabel("Submission title").fill("Revision two");
+    await contributorPage.getByLabel("Submission title").fill(revisionTwoTitle);
     await contributorPage.getByLabel("Description / note")
       .fill("Updated explanation with the requested concrete example.");
     await contributorPage.getByLabel("Approach").fill("The example now supports the documented result.");
@@ -285,6 +377,10 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
         .single();
       return error ? "error" : data.status;
     }, { timeout: 30_000 }).toBe("resubmitted");
+    const { error: resubmittedAwardError } = await admin.rpc("award_build_submission_reward", {
+      p_work_item_id: mainTask.workItemId,
+    });
+    expect(resubmittedAwardError?.code).toBe("PT409");
     await contributorPage.reload();
     await expect(
       contributorPage.getByText("Your submitted revision is read-only and awaiting review."),
@@ -350,6 +446,8 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       ":scope > .admin-build-section-heading > .admin-build-status",
     ))
       .toHaveText("Approved");
+    await expect(revisionTwoReview)
+      .toContainText("Reward awarded: 37 points");
 
     const { data: duplicateResult, error: duplicateError } = await admin.rpc("review_build_submission", {
       p_submission_id: revisionRows[1].id,
@@ -392,9 +490,8 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
 
     await contributorPage.reload();
     await expect(contributorPage.getByRole("heading", { name: "Work approved" })).toBeVisible();
-    await expect(contributorPage.getByText(
-      "This task is closed for editing. 37 points were awarded.",
-    )).toBeVisible();
+    await expect(contributorPage.getByText(/This task is closed for editing\. 37 points were awarded/))
+      .toBeVisible();
     await expect(contributorPage.getByLabel("Submission title")).toHaveCount(0);
     const { data: finalProfile, error: finalProfileError } = await admin
       .from("profiles")
@@ -403,9 +500,26 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       .single();
     expect(finalProfileError).toBeNull();
     expect(finalProfile?.points).toBe(pointsBefore + 37);
+    await expect(contributorPage.getByText(/37 points were awarded on/)).toBeVisible();
+
+    await contributorPage.goto("/member/activities");
+    const rewardActivity = contributorPage.locator(".activity-timeline-item")
+      .filter({ hasText: revisionTwoTitle });
+    await expect(rewardActivity.getByText("Build & Prove", { exact: true })).toBeVisible();
+    await expect(rewardActivity).toContainText("+37");
+
+    await contributorPage.goto("/member/leaderboard");
+    await expect(contributorPage.locator(".leaderboard-summary"))
+      .toContainText(`${(pointsBefore + 37).toLocaleString()} points earned`);
+
+    await adminPage.goto(`/admin/build-prove/tasks/${mainTask.assignmentId}`);
+    const approvedAdminWork = adminPage.locator(`#review-${mainTask.workItemId}`);
+    await expect(approvedAdminWork).toContainText("Reward awarded: 37 points");
+    await expect(approvedAdminWork.getByRole("button", { name: "Award reward" })).toHaveCount(0);
 
     const cancelledTask = await createTask(admin, memberId, cancelledTaskTitle, cancelledSlug);
     taskIds.push(cancelledTask.assignmentId);
+    workItemIds.push(cancelledTask.workItemId);
     console.log(`PHASE6_CANCELLED_TASK_ID=${cancelledTask.assignmentId}`);
     await submitThroughRpc(member, cancelledTask.workItemId);
     const { data: cancelledSubmission, error: cancelledSubmissionError } = await admin
@@ -436,11 +550,135 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       .eq("submission_id", cancelledSubmission.id);
     expect(cancelledReviewsError).toBeNull();
     expect(cancelledReviews).toHaveLength(0);
+
+    const legacyTask = await createTask(admin, memberId, legacyTaskTitle, legacySlug);
+    taskIds.push(legacyTask.assignmentId);
+    workItemIds.push(legacyTask.workItemId);
+    console.log(`PHASE7B_LEGACY_TASK_ID=${legacyTask.assignmentId}`);
+    console.log(`PHASE7B_LEGACY_WORK_ITEM_ID=${legacyTask.workItemId}`);
+    await submitThroughRpc(member, legacyTask.workItemId, legacyTaskTitle);
+    const { data: legacySubmission, error: legacySubmissionError } = await admin
+      .from("build_submissions")
+      .select("id")
+      .eq("work_item_id", legacyTask.workItemId)
+      .single();
+    expect(legacySubmissionError).toBeNull();
+    if (!legacySubmission) throw new Error("Legacy reward fixture submission was not created.");
+    submissionIds.push(legacySubmission.id);
+    const { data: beforeLegacyProfile, error: beforeLegacyProfileError } = await admin
+      .from("profiles")
+      .select("points")
+      .eq("id", memberId)
+      .single();
+    expect(beforeLegacyProfileError).toBeNull();
+    if (!beforeLegacyProfile) throw new Error("Could not read points before the explicit award.");
+    seedLegacyApprovedWorkItem(adminId, legacyTask.workItemId, legacySubmission.id);
+
+    const { data: legacyRewardBefore, error: legacyRewardBeforeError } = await admin
+      .from("build_submission_rewards")
+      .select("id")
+      .eq("work_item_id", legacyTask.workItemId)
+      .maybeSingle();
+    expect(legacyRewardBeforeError).toBeNull();
+    expect(legacyRewardBefore).toBeNull();
+
+    await contributorPage.goto(`/member/learn/tasks/${legacyTask.workItemId}`);
+    await expect(contributorPage.getByRole("heading", { name: "Work approved" })).toBeVisible();
+    await expect(contributorPage.getByText(
+      "is eligible but has not yet been awarded.",
+    )).toBeVisible();
+    const { error: legacyMemberAwardError } = await member.rpc("award_build_submission_reward", {
+      p_work_item_id: legacyTask.workItemId,
+    });
+    expect(legacyMemberAwardError?.code).toBe("42501");
+    const { error: legacyAnonymousAwardError } = await anonymous.rpc("award_build_submission_reward", {
+      p_work_item_id: legacyTask.workItemId,
+    });
+    expect(legacyAnonymousAwardError?.code).toBe("42501");
+
+    await page.goto(`/admin/build-prove/tasks/${legacyTask.assignmentId}`);
+    await expect(page).toHaveURL(/\/join\?mode=login&next=/);
+    await nonAdminPage.goto(`/admin/build-prove/tasks/${legacyTask.assignmentId}`);
+    await expect(nonAdminPage).toHaveURL(/\/member$/);
+    await expect(nonAdminPage.getByRole("button", { name: "Award reward" })).toHaveCount(0);
+
+    await adminPage.goto(`/admin/build-prove/tasks/${legacyTask.assignmentId}`);
+    const legacyAdminWork = adminPage.locator(`#review-${legacyTask.workItemId}`);
+    await expect(legacyAdminWork).toContainText("eligible for its configured 37-point reward");
+    const awardConfirmation = legacyAdminWork.getByLabel(
+      "I confirm awarding the configured 37 points to this member.",
+    );
+    await awardConfirmation.check();
+    await legacyAdminWork.getByRole("button", { name: "Award reward" }).click();
+    await expect(legacyAdminWork.locator(".admin-build-message.success"))
+      .toHaveText("37 reward points were awarded.");
+
+    const { data: legacyRewards, error: legacyRewardsError } = await admin
+      .from("build_submission_rewards")
+      .select("id, submission_id, profile_id, points_awarded")
+      .eq("work_item_id", legacyTask.workItemId);
+    expect(legacyRewardsError).toBeNull();
+    expect(legacyRewards).toHaveLength(1);
+    expect(legacyRewards?.[0]).toMatchObject({
+      submission_id: legacySubmission.id,
+      profile_id: memberId,
+      points_awarded: 37,
+    });
+    const { data: afterLegacyProfile, error: afterLegacyProfileError } = await admin
+      .from("profiles")
+      .select("points")
+      .eq("id", memberId)
+      .single();
+    expect(afterLegacyProfileError).toBeNull();
+    expect(afterLegacyProfile?.points).toBe(beforeLegacyProfile.points + 37);
+    const { data: legacyActivities, error: legacyActivitiesError } = await admin
+      .from("activities")
+      .select("id, points, activity_type")
+      .eq("build_assignment_member_id", legacyTask.workItemId);
+    expect(legacyActivitiesError).toBeNull();
+    expect(legacyActivities).toHaveLength(1);
+    expect(legacyActivities?.[0]).toMatchObject({ activity_type: "build_prove", points: 37 });
+
+    const { data: legacyRetry, error: legacyRetryError } = await admin.rpc(
+      "award_build_submission_reward",
+      { p_work_item_id: legacyTask.workItemId },
+    );
+    expect(legacyRetryError).toBeNull();
+    expect(rpcRecord(legacyRetry)).toMatchObject({
+      status: "already_awarded",
+      idempotent: true,
+      points_awarded: 37,
+    });
+    await adminPage.reload();
+    await expect(legacyAdminWork.getByRole("button", { name: "Award reward" })).toHaveCount(0);
+    await expect(legacyAdminWork).toContainText("Reward awarded: 37 points");
+    const { data: afterRetryProfile, error: afterRetryProfileError } = await admin
+      .from("profiles")
+      .select("points")
+      .eq("id", memberId)
+      .single();
+    expect(afterRetryProfileError).toBeNull();
+    expect(afterRetryProfile?.points).toBe(beforeLegacyProfile.points + 37);
+    const { data: legacyActivitiesAfterRetry, error: legacyActivitiesAfterRetryError } = await admin
+      .from("activities")
+      .select("id")
+      .eq("build_assignment_member_id", legacyTask.workItemId);
+    expect(legacyActivitiesAfterRetryError).toBeNull();
+    expect(legacyActivitiesAfterRetry).toHaveLength(1);
+
+    await contributorPage.reload();
+    await expect(contributorPage.getByText(/37 points were awarded on/)).toBeVisible();
+    await contributorPage.goto("/member/activities");
+    const legacyRewardActivity = contributorPage.locator(".activity-timeline-item")
+      .filter({ hasText: legacyTaskTitle });
+    await expect(legacyRewardActivity.getByText("Build & Prove", { exact: true })).toBeVisible();
+
     await adminPage.goto("/admin/build-prove/review");
     await expect(adminPage.locator(".admin-build-review-row").filter({ hasText: cancelledTaskTitle }))
       .toHaveCount(0);
   } finally {
     console.log(`PHASE6_DISPOSABLE_TASK_IDS=${taskIds.join(",")}`);
+    console.log(`PHASE6_DISPOSABLE_WORK_ITEM_IDS=${workItemIds.join(",")}`);
     console.log(`PHASE6_DISPOSABLE_SUBMISSION_IDS=${submissionIds.join(",")}`);
     if (mainWorkItemId) console.log(`PHASE6_MAIN_WORK_ITEM_ID=${mainWorkItemId}`);
     await Promise.all([

@@ -1,6 +1,6 @@
 export type Activity = {
   id: string;
-  type: "project" | "lesson" | "badge" | "event" | "challenge";
+  type: "project" | "lesson" | "badge" | "event" | "challenge" | "build_prove";
   title: string;
   detail: string;
   date: string;

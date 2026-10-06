@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "VibeSec-Skill": {
+      "source": "BehiSecc/VibeSec-Skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "1ecc71d212ca31e9cec683649adeff193ad1326f3d4eca24f618cb1a1c8457ee"
+    },
+    "feature-tracking": {
+      "source": "JunsW/feature-track",
+      "sourceType": "github",
+      "skillPath": "skills/feature-tracking/SKILL.md",
+      "computedHash": "7fcd55f77b8e1ef9dfbd555ba1106142a635db5ad9e19515c44647de745f55cc"
+    },
+    "oiloil-ui-ux-guide": {
+      "source": "oil-oil/oiloil-ui-ux-guide",
+      "sourceType": "github",
+      "skillPath": "skills/oiloil-ui-ux-guide/SKILL.md",
+      "computedHash": "26fdf985ddfa86211ebb392eb880b98b9b30cebe561d25a6e64417a490f0a81e"
+    },
+    "playwright-skill": {
+      "source": "testdino-hq/playwright-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "08a2811eb05218533ce06dbf5c226bdb7932b0b85d1608fb9cab2b0f91532e1a"
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "computedHash": "2abaeac1de432c76abda0ca7ba618901d2e94f8817b3650f9c523acea2d224f5"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "3589907ee34dc8b1b7223a33fac98ab841a9e42f9960ab4433a832f0c6f00be0"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "3cfe4ebb6fa7288f668d87880d279c8e48f7a92b63415e296857060f5ce22e05"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/verification-before-completion/SKILL.md",
+      "computedHash": "b529822bdac4b197b180fe12225cff86b930b65910435103c10622df7f041651"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "computedHash": "c2647b5bf067be353a893e5a39a632cbbeb7ad81e61fa5ae227ece5490029073"
+    }
+  }
+}

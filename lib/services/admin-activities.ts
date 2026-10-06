@@ -18,6 +18,7 @@ export const ACTIVITY_TYPES = [
   "project",
   "badge",
   "lesson",
+  "build_prove",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];

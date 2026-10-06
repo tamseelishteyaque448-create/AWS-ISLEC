@@ -1,4 +1,4 @@
-import { Award, BookOpen, CalendarDays, FolderKanban, Target } from "lucide-react";
+import { Award, BookOpen, CalendarDays, FolderKanban, Hammer, Target } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Activity } from "@/data/activities";
 import Link from "next/link";
@@ -9,6 +9,7 @@ const activityMeta: Record<Activity["type"], { label: string; icon: LucideIcon }
   challenge: { label: "Challenge", icon: Target },
   event: { label: "Event", icon: CalendarDays },
   badge: { label: "Badge", icon: Award },
+  build_prove: { label: "Build & Prove", icon: Hammer },
 };
 
 export function ActivityTimeline({ activities }: { activities: Activity[] }) {

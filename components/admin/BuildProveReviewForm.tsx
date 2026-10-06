@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import {
   cancelBuildWorkItemAction,
   reviewBuildSubmissionAction,
+  awardBuildRewardAction,
   type BuildProveAdminActionState,
 } from "@/app/admin/build-prove/actions";
 
@@ -109,11 +110,46 @@ export function BuildProveReviewForm({
       )}
 
       <p className="admin-build-inline-note">
-        Reviews are append-only. Approving does not yet award points; recognition is a separate,
-        controlled step.
+        Reviews are append-only. Approval awards the assignment-time reward through the existing
+        authoritative reward operation.
       </p>
     </div>
   );
+}
+
+export function AwardBuildRewardForm({
+      assignmentId,
+      workItemId,
+      points,
+}: {
+      assignmentId: string;
+      workItemId: string;
+      points: number;
+}) {
+      const [state, action] = useActionState(awardBuildRewardAction, initialState);
+      const confirmationId = `confirm-reward-${workItemId}`;
+
+      return <form action={action} className="admin-build-review-form">
+        <input type="hidden" name="assignmentId" value={assignmentId} />
+        <input type="hidden" name="workItemId" value={workItemId} />
+        <label>
+          <input
+            type="checkbox"
+            name="confirmAward"
+            value="yes"
+            required
+            aria-describedby={confirmationId}
+          />
+          I confirm awarding the configured {points} points to this member.
+        </label>
+        <div className="admin-build-action-row">
+          <SubmitButton label="Award reward" />
+        </div>
+        <Message state={state} />
+        <span id={confirmationId} className="sr-only">
+          This action awards the existing assignment-time reward; the amount cannot be edited here.
+        </span>
+      </form>;
 }
 
 /** Admin-only terminal state. Cancelled work is never editable by the member. */
