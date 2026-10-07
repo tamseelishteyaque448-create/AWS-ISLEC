@@ -612,6 +612,10 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     await legacyAdminWork.getByRole("button", { name: "Award reward" }).click();
     await expect(legacyAdminWork.locator(".admin-build-message.success"))
       .toHaveText("37 reward points were awarded.");
+    await expect(legacyAdminWork.getByRole("status").filter({
+      hasText: "Reward awarded: 37 points",
+    })).toBeVisible();
+    await expect(legacyAdminWork.getByRole("button", { name: "Award reward" })).toHaveCount(0);
 
     const { data: legacyRewards, error: legacyRewardsError } = await admin
       .from("build_submission_rewards")

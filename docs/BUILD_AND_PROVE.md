@@ -9,7 +9,7 @@ Future implementation work must read this document first, inspect the current re
 
 **Document status:** Architecture approved
 **Version:** 1.0
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-07
 **Owner / authority:** AWS-ISLEC product and engineering maintainers
 **Implementation status:** DATABASE CORE, SERVER-SIDE SERVICES, PHASE 4A MEMBER UI, PHASE 4B.3 MEMBER WORKBENCH, AND ADMIN AUTHORING/REVIEW UI IMPLEMENTED; HOSTED PARITY REMAINS
 
@@ -572,14 +572,21 @@ Admin Build & Prove authoring frontend: IMPLEMENTED; Phase 5B runtime-verified
 Admin review queue/detail frontend: IMPLEMENTED; complete review lifecycle verified locally
 Admin review RPCs: IMPLEMENTED and used through the server-side authorization boundary
 Private evidence and reference Storage flow: IMPLEMENTED and verified against local disposable Supabase
-Reward contract: IMPLEMENTED locally; approval atomically creates one immutable work-item reward, one activity, and one points mutation from the assignment-time snapshot
-Reward retries and concurrent approval: locally verified; no historical approval backfill
-E2E: Phase 6 review lifecycle with Phase 7A reward assertions passes locally; hosted parity NOT VERIFIED
+Reward contract: IMPLEMENTED and verified locally; approval atomically creates one immutable work-item reward, one activity, and one points mutation from the assignment-time snapshot
+Explicit award for previously approved, unrewarded work: locally verified; no historical approval backfill
+Reward retry, duplicate protection, authorization, activity/points integration, and cancellation protection: locally verified by the focused disposable E2E
+Admin award acknowledgement and router refresh: locally verified; acknowledgement remains visible and the final awarded state remains server-backed
+Focused E2E: `npm run test:e2e:disposable -- tests/e2e/disposable/build-prove-phase6-review.spec.ts` — 1 passed, 0 failed
+Disposable fixture cleanup: BLOCKED; 9 assignments, 9 work items, 12 submissions, 9 reviews, 6 rewards, 6 activities, 12 drafts, and 6 evidence rows/storage objects remain from failed and passing focused runs; 222 reward points were applied
 Hosted QA/production parity: NOT VERIFIED
 ```
 
 **Next action:**
 
-`COMPLETE THE PHASE 7A LOCAL REWARD-CONTRACT VALIDATION GATE`
+`IMPLEMENT BUILD & PROVE PHASE 7B — RECOGNITION / PROGRESSION UI`
+
+The local disposable database is not reported as clean. The repository has no approved reversible cleanup procedure for these protected Build & Prove history/reward records and their point/stage effects. Do not delete history, subtract points, or reverse stage as cleanup.
+
+Phase 7B uses only the existing approved Build & Prove task detail, Activity/Journal history, and canonical Profile/Leaderboard points surfaces. Do not add another points balance, a new recognition page, or a badge system. Do not expose canonical member stage in Phase 7B: Build & Prove points alone do not determine stage, and the current member profile service/type does not expose the authoritative stage. A zero-point snapshot remains a valid recorded reward: communicate approval and that the configured reward was 0 points, with no points added; do not describe it as an unawarded item.
 
 The service layer exposes member-scoped domain/work-item/detail/revision reads and admin-scoped overview/task/detail/review-queue reads. Member reads derive identity from authenticated claims and omit cancelled tasks; existing RLS remains authoritative. Read models expose attachment metadata only, never Storage object paths or public URLs. The member workbench and admin authoring/review surfaces use server-side services and authoritative RPCs. The Phase 6 lifecycle preserves changes-requested feedback, immutable resubmission, latest-revision queue behavior, stale-revision rejection, cancellation protection, and protected evidence download. Phase 7A integrates approval with the reward ledger, member points total, progression stage advancement, and a `build_prove` activity in one transaction. A retry returns the recorded reward; an approved task is never automatically backfilled by the migration. Local rollback-only SQL proves assignment-snapshot use, authorization, idempotency, cancelled-work rejection, and rollback on activity failure. Hosted QA/production parity remains unverified.

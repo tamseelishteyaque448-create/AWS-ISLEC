@@ -290,23 +290,14 @@ function MemberReview({
       {workItem.rewardPointsSnapshot} points snapshot · updated {formattedDate(workItem.updatedAt)}
     </p>
 
-    {workItem.status === "approved" && workItem.rewardPointsAwarded != null ? (
-      <p className="admin-build-inline-note" role="status">
-        Reward awarded: {workItem.rewardPointsAwarded} points
-        {workItem.rewardAwardedAt ? ` · ${formattedDate(workItem.rewardAwardedAt)}` : ""}.
-      </p>
-    ) : workItem.status === "approved" ? (
-      <section className="admin-build-review" aria-label="Award approved work reward">
-        <p className="admin-build-inline-note">
-          This approved work is eligible for its configured {workItem.rewardPointsSnapshot}-point
-          reward. Awarding is permanent and uses the existing assignment-time snapshot.
-        </p>
-        <AwardBuildRewardForm
-          assignmentId={assignmentId}
-          workItemId={workItem.id}
-          points={workItem.rewardPointsSnapshot}
-        />
-      </section>
+    {workItem.status === "approved" ? (
+      <AwardBuildRewardForm
+        assignmentId={assignmentId}
+        workItemId={workItem.id}
+        points={workItem.rewardPointsSnapshot}
+        rewardPointsAwarded={workItem.rewardPointsAwarded}
+        rewardAwardedAt={workItem.rewardAwardedAt ? formattedDate(workItem.rewardAwardedAt) : null}
+      />
     ) : null}
 
     {revisionHistory.length === 0

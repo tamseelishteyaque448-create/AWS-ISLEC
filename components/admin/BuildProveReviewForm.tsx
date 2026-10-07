@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   cancelBuildWorkItemAction,
@@ -118,38 +119,64 @@ export function BuildProveReviewForm({
 }
 
 export function AwardBuildRewardForm({
-      assignmentId,
-      workItemId,
-      points,
+  assignmentId,
+  workItemId,
+  points,
+  rewardPointsAwarded,
+  rewardAwardedAt,
 }: {
-      assignmentId: string;
-      workItemId: string;
-      points: number;
+  assignmentId: string;
+  workItemId: string;
+  points: number;
+  rewardPointsAwarded: number | null;
+  rewardAwardedAt: string | null;
 }) {
-      const [state, action] = useActionState(awardBuildRewardAction, initialState);
-      const confirmationId = `confirm-reward-${workItemId}`;
+  const [state, action] = useActionState(awardBuildRewardAction, initialState);
+  const router = useRouter();
+  const confirmationId = `confirm-reward-${workItemId}`;
 
-      return <form action={action} className="admin-build-review-form">
-        <input type="hidden" name="assignmentId" value={assignmentId} />
-        <input type="hidden" name="workItemId" value={workItemId} />
-        <label>
-          <input
-            type="checkbox"
-            name="confirmAward"
-            value="yes"
-            required
-            aria-describedby={confirmationId}
-          />
-          I confirm awarding the configured {points} points to this member.
-        </label>
-        <div className="admin-build-action-row">
-          <SubmitButton label="Award reward" />
-        </div>
-        <Message state={state} />
-        <span id={confirmationId} className="sr-only">
-          This action awards the existing assignment-time reward; the amount cannot be edited here.
-        </span>
-      </form>;
+  useEffect(() => {
+    if (state.status === "success") {
+      router.refresh();
+    }
+  }, [router, state.status]);
+
+  return <>
+    {rewardPointsAwarded !== null ? (
+      <p className="admin-build-inline-note" role="status">
+        Reward awarded: {rewardPointsAwarded} points
+        {rewardAwardedAt ? ` · ${rewardAwardedAt}` : ""}.
+      </p>
+    ) : (
+      <section className="admin-build-review" aria-label="Award approved work reward">
+        <p className="admin-build-inline-note">
+          This approved work is eligible for its configured {points}-point reward. Awarding is
+          permanent and uses the existing assignment-time snapshot.
+        </p>
+        <form action={action} className="admin-build-review-form">
+          <input type="hidden" name="assignmentId" value={assignmentId} />
+          <input type="hidden" name="workItemId" value={workItemId} />
+          <label>
+            <input
+              type="checkbox"
+              name="confirmAward"
+              value="yes"
+              required
+              aria-describedby={confirmationId}
+            />
+            I confirm awarding the configured {points} points to this member.
+          </label>
+          <div className="admin-build-action-row">
+            <SubmitButton label="Award reward" />
+          </div>
+          <span id={confirmationId} className="sr-only">
+            This action awards the existing assignment-time reward; the amount cannot be edited here.
+          </span>
+        </form>
+      </section>
+    )}
+    <Message state={state} />
+  </>;
 }
 
 /** Admin-only terminal state. Cancelled work is never editable by the member. */
