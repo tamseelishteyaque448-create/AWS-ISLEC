@@ -576,14 +576,15 @@ Reward contract: IMPLEMENTED and verified locally; approval atomically creates o
 Explicit award for previously approved, unrewarded work: locally verified; no historical approval backfill
 Reward retry, duplicate protection, authorization, activity/points integration, and cancellation protection: locally verified by the focused disposable E2E
 Admin award acknowledgement and router refresh: locally verified; acknowledgement remains visible and the final awarded state remains server-backed
-Focused E2E: `npm run test:e2e:disposable -- tests/e2e/disposable/build-prove-phase6-review.spec.ts` — 1 passed, 0 failed
+Focused local E2E: `npm run test:e2e:disposable -- tests/e2e/disposable/build-prove-phase6-review.spec.ts` — previously reported 1 passed, 0 failed
+Phase 7B focused hosted lifecycle integration: **PASS** on commit `0e06659241204e6aae23852c4850871426184a43`; [GitHub Actions run #2](https://github.com/tamseelishteyaque448-create/AWS-ISLEC/actions/runs/38035643278) — 1 Playwright test passed, isolated migrations and seed applied, Auth isolation preflight passed, and Supabase cleanup passed. This is not QA/production parity or full Phase 7B release validation.
 Disposable fixture cleanup: BLOCKED; 9 assignments, 9 work items, 12 submissions, 9 reviews, 6 rewards, 6 activities, 12 drafts, and 6 evidence rows/storage objects remain from failed and passing focused runs; 222 reward points were applied
 Hosted QA/production parity: NOT VERIFIED
 ```
 
 **Next action:**
 
-`VERIFY BUILD & PROVE PHASE 7B` through the manual GitHub-hosted ephemeral integration workflow documented in [TESTING.md](./TESTING.md). Do not run the disposable suite or start Docker/WSL on this workstation.
+`RUN THE UPDATED PHASE 7B HOSTED GATE, THEN CLOSE THE REMAINING CHECKS`: the focused E2E has unexecuted assertions for empty states, anonymous/cross-member denial, and responsive recognition/points surfaces. The previous hosted pass predates these assertions. Loading and data-error fallback states also need deterministic runtime evidence. Static validation on the current worktree passed; rerun it after any further code changes. Phase 7B remains in progress. Do not run the disposable suite or start Docker/WSL on this workstation.
 
 The local disposable database is not reported as clean. The repository has no approved reversible cleanup procedure for these protected Build & Prove history/reward records and their point/stage effects. Do not delete history, subtract points, or reverse stage as cleanup.
 

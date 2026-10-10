@@ -11,6 +11,7 @@ import { assertLegacyApprovalFixtureResult } from "./legacy-approval-query-resul
 test.describe.configure({ timeout: 300_000 });
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const RECOGNITION_VIEWPORTS = [320, 360, 390, 412, 768, 1024, 1440];
 
 type LocalRole = "ADMIN" | "CONTRIBUTOR" | "NON_ADMIN";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -172,6 +173,7 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
   adminPage,
   contributorPage,
   nonAdminPage,
+  ownerPage,
   page,
 }) => {
   await Promise.all([
@@ -228,6 +230,11 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       .single();
     expect(memberProfileError).toBeNull();
     if (!memberProfile) throw new Error("Could not resolve the assigned member profile.");
+    await contributorPage.goto("/member/learn/documentation");
+    await expect(contributorPage.getByRole("heading", { name: "Nothing assigned here yet." }))
+      .toBeVisible();
+    await contributorPage.goto("/member/activities");
+    await expect(contributorPage.getByRole("heading", { name: "No activity yet." })).toBeVisible();
     await contributorPage.goto("/member");
     await expect(contributorPage.getByRole("link", {
       name: `Open profile for ${memberProfile.full_name}`,
@@ -239,6 +246,13 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     workItemIds.push(mainTask.workItemId);
     console.log(`PHASE6_TASK_ID=${mainTask.assignmentId}`);
     console.log(`PHASE6_WORK_ITEM_ID=${mainTask.workItemId}`);
+    await page.goto(`/member/learn/tasks/${mainTask.workItemId}`);
+    await expect(page).toHaveURL(/\/join\?mode=login&next=/);
+    const otherMemberTaskResponse = await ownerPage.goto(
+      `/member/learn/tasks/${mainTask.workItemId}`,
+    );
+    expect(otherMemberTaskResponse?.status()).toBe(404);
+    await expect(ownerPage.getByRole("heading", { name: "Work approved" })).toHaveCount(0);
     const { error: assignedAwardError } = await admin.rpc("award_build_submission_reward", {
       p_work_item_id: mainTask.workItemId,
     });
@@ -793,6 +807,76 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     await contributorPage.goto("/member/leaderboard");
     await expect(contributorPage.locator(".leaderboard-summary"))
       .toContainText(`${beforeZeroReward.points.toLocaleString()} points earned`);
+
+    await contributorPage.goto(`/member/learn/tasks/${zeroTask.workItemId}`);
+    for (const width of RECOGNITION_VIEWPORTS) {
+      await contributorPage.setViewportSize({ width, height: 900 });
+      expect(
+        await contributorPage.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `Approved zero-point task detail overflows at ${width}px`,
+      ).toBe(true);
+      await expect(contributorPage.getByText(
+        "Your work was approved. This assignment’s configured reward was 0 points, so no points were added.",
+        { exact: true },
+      )).toBeVisible();
+    }
+
+    await contributorPage.goto("/member");
+    const responsiveOverviewReward = contributorPage.locator(".list-item")
+      .filter({ hasText: zeroTaskTitle });
+    for (const width of RECOGNITION_VIEWPORTS) {
+      await contributorPage.setViewportSize({ width, height: 900 });
+      expect(
+        await contributorPage.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `Member overview activity overflows at ${width}px`,
+      ).toBe(true);
+      await expect(responsiveOverviewReward.getByText("0 points", { exact: true })).toBeVisible();
+    }
+
+    await contributorPage.goto("/member/activities");
+    const responsiveJournalReward = contributorPage.locator(".activity-timeline-item")
+      .filter({ hasText: zeroTaskTitle });
+    for (const width of RECOGNITION_VIEWPORTS) {
+      await contributorPage.setViewportSize({ width, height: 900 });
+      expect(
+        await contributorPage.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `Activity journal overflows at ${width}px`,
+      ).toBe(true);
+      await expect(responsiveJournalReward.locator(".activity-timeline-points"))
+        .toHaveText("0 points");
+    }
+
+    await contributorPage.goto("/member/profile");
+    for (const width of RECOGNITION_VIEWPORTS) {
+      await contributorPage.setViewportSize({ width, height: 900 });
+      expect(
+        await contributorPage.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `Member profile overflows at ${width}px`,
+      ).toBe(true);
+      await expect(contributorPage.getByRole("heading", { name: "Points" }).locator(".."))
+        .toContainText(beforeZeroReward.points.toLocaleString());
+    }
+
+    await contributorPage.goto("/member/leaderboard");
+    for (const width of RECOGNITION_VIEWPORTS) {
+      await contributorPage.setViewportSize({ width, height: 900 });
+      expect(
+        await contributorPage.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `Member leaderboard overflows at ${width}px`,
+      ).toBe(true);
+      await expect(contributorPage.locator(".leaderboard-summary"))
+        .toContainText(`${beforeZeroReward.points.toLocaleString()} points earned`);
+    }
 
     await adminPage.goto("/admin/build-prove/review");
     await expect(adminPage.locator(".admin-build-review-row").filter({ hasText: cancelledTaskTitle }))
