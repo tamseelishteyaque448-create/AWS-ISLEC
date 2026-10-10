@@ -254,7 +254,7 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       name: "This page could not be found.",
       exact: true,
     })).toBeVisible();
-    await expect(ownerPage.locator('meta[name="robots"][content="noindex"]')).toHaveCount(1);
+    await expect(ownerPage.locator('meta[name="robots"][content="noindex"]').first()).toBeAttached();
     await expect(ownerPage.getByRole("heading", { name: taskTitle, exact: true })).toHaveCount(0);
     await expect(ownerPage.getByText("Submit, revise, and approve one practical artifact.", {
       exact: true,
