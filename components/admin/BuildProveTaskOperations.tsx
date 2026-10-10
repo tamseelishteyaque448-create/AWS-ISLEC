@@ -295,7 +295,7 @@ function MemberReview({
         assignmentId={assignmentId}
         workItemId={workItem.id}
         points={workItem.rewardPointsSnapshot}
-        rewardPointsAwarded={workItem.rewardPointsAwarded}
+        rewardPointsAwarded={workItem.rewardPointsAwarded ?? null}
         rewardAwardedAt={workItem.rewardAwardedAt ? formattedDate(workItem.rewardAwardedAt) : null}
       />
     ) : null}

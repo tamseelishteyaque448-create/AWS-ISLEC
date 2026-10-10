@@ -642,8 +642,10 @@ export function BuildProveTaskDetail({ detail }: { detail: Detail }) {
             <div><span>Deadline</span><strong>{task.deadlineAt ? readableDate(task.deadlineAt) : "No deadline"}</strong></div>
             <div><span>Reward</span><strong>{workItem.status === "approved"
               ? workItem.rewardPointsAwarded == null
-                ? `${workItem.rewardPointsSnapshot} points eligible · not yet awarded`
-                : `${workItem.rewardPointsAwarded} points awarded`
+                ? `${workItem.rewardPointsSnapshot} points configured · not yet recorded`
+                : workItem.rewardPointsAwarded === 0
+                  ? "Reward recorded · 0 points"
+                  : `${workItem.rewardPointsAwarded} points awarded`
               : `${workItem.rewardPointsSnapshot} points on approval`}</strong></div>
             <div><span>Difficulty</span><strong>{task.difficulty}</strong></div>
           </div>
@@ -702,14 +704,20 @@ export function BuildProveTaskDetail({ detail }: { detail: Detail }) {
             <h2>Work approved</h2>
             {workItem.rewardPointsAwarded == null ? (
               <p>
-                This task is closed for editing. Your {workItem.rewardPointsSnapshot}-point reward
-                is eligible but has not yet been awarded.
+                Your work is approved. This assignment’s configured reward of {workItem.rewardPointsSnapshot}
+                {" "}points has not yet been recorded.
               </p>
+            ) : workItem.rewardPointsAwarded === 0 ? (
+              <p>Your work was approved. This assignment’s configured reward was 0 points, so no points were added.</p>
             ) : (
-              <p>
-                This task is closed for editing. {workItem.rewardPointsAwarded} points were awarded
-                {workItem.rewardAwardedAt ? ` on ${readableDate(workItem.rewardAwardedAt)}` : ""}.
-              </p>
+              <p>Your work was approved. You earned {workItem.rewardPointsAwarded} points.</p>
+            )}
+            <p>
+              Any points awarded for Build &amp; Prove work are added to your existing points total on
+              your profile and leaderboard.
+            </p>
+            {workItem.rewardPointsAwarded != null && workItem.rewardAwardedAt && (
+              <p>Reward recorded on {readableDate(workItem.rewardAwardedAt)}.</p>
             )}
           </section>
         )}

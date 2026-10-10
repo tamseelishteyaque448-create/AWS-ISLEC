@@ -95,6 +95,7 @@ async function createTask(
   memberId: string,
   taskTitle: string,
   slug: string,
+  rewardPoints = 37,
 ) {
   const { data, error } = await admin.rpc("save_build_assignment", {
     p_slug: slug,
@@ -111,7 +112,7 @@ async function createTask(
     p_deliverables: ["A documented artifact"],
     p_submission_requirements: ["Title", "Explanation"],
     p_evaluation_criteria: ["Clear, useful explanation"],
-    p_reward_points: 37,
+    p_reward_points: rewardPoints,
     p_member_ids: [memberId],
   });
   expect(error, "Task fixture must be created through the authorized admin RPC").toBeNull();
@@ -490,8 +491,11 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
 
     await contributorPage.reload();
     await expect(contributorPage.getByRole("heading", { name: "Work approved" })).toBeVisible();
-    await expect(contributorPage.getByText(/This task is closed for editing\. 37 points were awarded/))
+    await expect(contributorPage.getByText("Your work was approved. You earned 37 points."))
       .toBeVisible();
+    await expect(contributorPage.getByText(
+      "Any points awarded for Build & Prove work are added to your existing points total on your profile and leaderboard.",
+    )).toBeVisible();
     await expect(contributorPage.getByLabel("Submission title")).toHaveCount(0);
     const { data: finalProfile, error: finalProfileError } = await admin
       .from("profiles")
@@ -500,7 +504,11 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
       .single();
     expect(finalProfileError).toBeNull();
     expect(finalProfile?.points).toBe(pointsBefore + 37);
-    await expect(contributorPage.getByText(/37 points were awarded on/)).toBeVisible();
+    await expect(contributorPage.getByText(/Reward recorded on/)).toBeVisible();
+
+    await contributorPage.goto("/member");
+    const recentMainReward = contributorPage.locator(".list-item").filter({ hasText: revisionTwoTitle });
+    await expect(recentMainReward).toContainText("+37");
 
     await contributorPage.goto("/member/activities");
     const rewardActivity = contributorPage.locator(".activity-timeline-item")
@@ -511,6 +519,9 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     await contributorPage.goto("/member/leaderboard");
     await expect(contributorPage.locator(".leaderboard-summary"))
       .toContainText(`${(pointsBefore + 37).toLocaleString()} points earned`);
+    await contributorPage.goto("/member/profile");
+    await expect(contributorPage.getByRole("heading", { name: "Points" }).locator(".."))
+      .toContainText((pointsBefore + 37).toLocaleString());
 
     await adminPage.goto(`/admin/build-prove/tasks/${mainTask.assignmentId}`);
     const approvedAdminWork = adminPage.locator(`#review-${mainTask.workItemId}`);
@@ -585,7 +596,7 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     await contributorPage.goto(`/member/learn/tasks/${legacyTask.workItemId}`);
     await expect(contributorPage.getByRole("heading", { name: "Work approved" })).toBeVisible();
     await expect(contributorPage.getByText(
-      "is eligible but has not yet been awarded.",
+      "Your work is approved. This assignment’s configured reward of 37 points has not yet been recorded.",
     )).toBeVisible();
     const { error: legacyMemberAwardError } = await member.rpc("award_build_submission_reward", {
       p_work_item_id: legacyTask.workItemId,
@@ -671,11 +682,103 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     expect(legacyActivitiesAfterRetry).toHaveLength(1);
 
     await contributorPage.reload();
-    await expect(contributorPage.getByText(/37 points were awarded on/)).toBeVisible();
+    await expect(contributorPage.getByText("Your work was approved. You earned 37 points."))
+      .toBeVisible();
+    await expect(contributorPage.getByText(/Reward recorded on/)).toBeVisible();
     await contributorPage.goto("/member/activities");
     const legacyRewardActivity = contributorPage.locator(".activity-timeline-item")
       .filter({ hasText: legacyTaskTitle });
     await expect(legacyRewardActivity.getByText("Build & Prove", { exact: true })).toBeVisible();
+    await contributorPage.goto("/member");
+    const recentLegacyReward = contributorPage.locator(".list-item").filter({ hasText: legacyTaskTitle });
+    await expect(recentLegacyReward).toContainText("+37");
+    await contributorPage.goto("/member/profile");
+    await expect(contributorPage.getByRole("heading", { name: "Points" }).locator(".."))
+      .toContainText((beforeLegacyProfile.points + 37).toLocaleString());
+    await contributorPage.goto("/member/leaderboard");
+    await expect(contributorPage.locator(".leaderboard-summary"))
+      .toContainText(`${(beforeLegacyProfile.points + 37).toLocaleString()} points earned`);
+
+    const zeroTaskTitle = `Phase 7B zero reward ${testKey.slice(-8)}`;
+    const zeroTask = await createTask(
+      admin,
+      memberId,
+      zeroTaskTitle,
+      `phase-7b-zero-reward-${testKey}`,
+      0,
+    );
+    taskIds.push(zeroTask.assignmentId);
+    workItemIds.push(zeroTask.workItemId);
+    await submitThroughRpc(member, zeroTask.workItemId, zeroTaskTitle);
+    const { data: zeroSubmission, error: zeroSubmissionError } = await admin
+      .from("build_submissions")
+      .select("id")
+      .eq("work_item_id", zeroTask.workItemId)
+      .single();
+    expect(zeroSubmissionError).toBeNull();
+    if (!zeroSubmission) throw new Error("Zero-reward test submission was not created.");
+    submissionIds.push(zeroSubmission.id);
+    const { data: beforeZeroReward, error: beforeZeroRewardError } = await admin
+      .from("profiles")
+      .select("points")
+      .eq("id", memberId)
+      .single();
+    expect(beforeZeroRewardError).toBeNull();
+    if (!beforeZeroReward) throw new Error("Could not read points before the zero-point reward.");
+
+    await adminPage.goto("/admin/build-prove/review");
+    const zeroRewardQueueRow = adminPage.locator(".admin-build-review-row")
+      .filter({ hasText: zeroTaskTitle });
+    await zeroRewardQueueRow.getByRole("link", { name: "Review" }).click();
+    const zeroRewardReview = adminPage.locator(`#review-${zeroTask.workItemId}`);
+    await zeroRewardReview.getByRole("button", { name: "Approve submission" }).click();
+    await expect(zeroRewardReview.locator(
+      ":scope > .admin-build-section-heading > .admin-build-status",
+    )).toHaveText("Approved");
+
+    await contributorPage.goto(`/member/learn/tasks/${zeroTask.workItemId}`);
+    await expect(contributorPage.getByRole("heading", { name: "Work approved" })).toBeVisible();
+    await expect(contributorPage.getByText(
+      "Your work was approved. This assignment’s configured reward was 0 points, so no points were added.",
+      { exact: true },
+    )).toBeVisible();
+    await expect(contributorPage.getByText(
+      "Any points awarded for Build & Prove work are added to your existing points total on your profile and leaderboard.",
+    )).toBeVisible();
+    await expect(contributorPage.getByText(/0 points were awarded/)).toHaveCount(0);
+
+    const { data: zeroRewardRows, error: zeroRewardRowsError } = await admin
+      .from("build_submission_rewards")
+      .select("points_awarded")
+      .eq("work_item_id", zeroTask.workItemId);
+    expect(zeroRewardRowsError).toBeNull();
+    expect(zeroRewardRows).toEqual([{ points_awarded: 0 }]);
+    const { data: afterZeroReward, error: afterZeroRewardError } = await admin
+      .from("profiles")
+      .select("points")
+      .eq("id", memberId)
+      .single();
+    expect(afterZeroRewardError).toBeNull();
+    expect(afterZeroReward?.points).toBe(beforeZeroReward.points);
+
+    await contributorPage.goto("/member/activities");
+    const zeroRewardActivity = contributorPage.locator(".activity-timeline-item")
+      .filter({ hasText: zeroTaskTitle });
+    await expect(zeroRewardActivity).toHaveCount(1);
+    await expect(zeroRewardActivity.getByText("Build & Prove", { exact: true })).toBeVisible();
+    await expect(zeroRewardActivity.locator(".activity-timeline-points")).toHaveText("0 points");
+    await expect(zeroRewardActivity.locator(".activity-timeline-points")).not.toHaveText("+0");
+    await contributorPage.goto("/member");
+    const recentZeroReward = contributorPage.locator(".list-item").filter({ hasText: zeroTaskTitle });
+    await expect(recentZeroReward).toHaveCount(1);
+    await expect(recentZeroReward.getByText("0 points", { exact: true })).toBeVisible();
+    await expect(recentZeroReward.getByText("+0", { exact: true })).toHaveCount(0);
+    await contributorPage.goto("/member/profile");
+    await expect(contributorPage.getByRole("heading", { name: "Points" }).locator(".."))
+      .toContainText(beforeZeroReward.points.toLocaleString());
+    await contributorPage.goto("/member/leaderboard");
+    await expect(contributorPage.locator(".leaderboard-summary"))
+      .toContainText(`${beforeZeroReward.points.toLocaleString()} points earned`);
 
     await adminPage.goto("/admin/build-prove/review");
     await expect(adminPage.locator(".admin-build-review-row").filter({ hasText: cancelledTaskTitle }))

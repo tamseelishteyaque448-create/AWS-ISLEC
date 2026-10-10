@@ -42,6 +42,14 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 class InvalidBuildProveFormError extends Error {}
 
+function revalidateBuildProveMemberViews() {
+  revalidatePath("/member");
+  revalidatePath("/member/activities");
+  revalidatePath("/member/profile");
+  revalidatePath("/member/leaderboard");
+  revalidatePath("/member/learn/tasks/[taskId]", "page");
+}
+
 function formText(formData: FormData, key: string): string {
   const value = formData.get(key);
   if (typeof value !== "string") throw new InvalidBuildProveFormError();
@@ -288,6 +296,9 @@ export async function reviewBuildSubmissionAction(
     }
     revalidatePath("/admin/build-prove");
     revalidatePath("/admin/build-prove/review");
+    if (decision === "approved") {
+      revalidateBuildProveMemberViews();
+    }
     return {
       status: "success",
       message: result.idempotent
@@ -336,9 +347,7 @@ export async function awardBuildRewardAction(
       revalidatePath(`/admin/build-prove/tasks/${assignmentId}`);
     }
     revalidatePath("/admin/build-prove");
-    revalidatePath("/member/activities");
-    revalidatePath("/member/leaderboard");
-    revalidatePath(`/member/learn/tasks/${workItemId}`);
+    revalidateBuildProveMemberViews();
     return {
       status: "success",
       message: result.idempotent

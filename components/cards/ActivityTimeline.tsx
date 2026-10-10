@@ -25,12 +25,15 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
       {activities.map((activity) => {
         const meta = activityMeta[activity.type];
         const Icon = meta.icon;
+        const pointsLabel = activity.type === "build_prove" && activity.points === 0
+          ? "0 points"
+          : `+${activity.points}`;
         return <article className="activity-timeline-item" key={activity.id}>
           <div className={`activity-timeline-node activity-type-${activity.type}`} aria-hidden="true"><Icon size={17} strokeWidth={1.8} /></div>
           <div className="activity-timeline-content">
             <div className="activity-timeline-topline">
               <span className="activity-timeline-type">{meta.label}</span>
-              <span className="activity-timeline-points">+{activity.points}</span>
+              <span className="activity-timeline-points">{pointsLabel}</span>
             </div>
             <h3>{activity.title}</h3>
             <p>{activity.detail}</p>

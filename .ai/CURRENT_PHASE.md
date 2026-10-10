@@ -2,11 +2,13 @@
 
 ## Build & Prove Phase 7B - Recognition / Progression UI
 
-**Status:** CLEARED TO IMPLEMENT; NOT STARTED.
+**Status:** IN PROGRESS; VALIDATION BLOCKED.
 
 Phase 7A's reward flow and explicit award for previously approved work passed the focused local-disposable E2E (1 passed, 0 failed). The admin success acknowledgement now remains visible across `router.refresh()`, and the final awarded state remains server-backed. This is local evidence only; QA/production parity is **NOT VERIFIED**.
 
-Local-disposable cleanup is **BLOCKED**: no repository-approved reversible cleanup procedure exists for the protected reward/history data and resulting point/stage effects. The scoped E2E fixtures remain in the local database; the environment is not reported as clean. Do not manually delete protected history, subtract points, or reverse stage changes.
+Local-disposable cleanup is **BLOCKED**: no repository-approved reversible cleanup procedure exists for the protected reward/history data and resulting point/stage effects. Fixture status is **NOT VERIFIED** because the local Docker/WSL environment is unavailable. Do not manually delete protected history, subtract points, reverse stage changes, or assume the environment is clean.
+
+Phase 7B member presentation and cache invalidation work is in progress. TypeScript, production build, lint, and the safe unit/environment-guard checks passed on 2026-10-10. Mutation-backed E2E and local Supabase integration verification are **NOT VERIFIED**; do not start Docker/WSL or run the disposable suite for this gate.
 
 Phase 7B scope: communicate approved work and its configured reward on the existing Build & Prove task detail; reflect recognition in existing Activity/Journal history; keep points on the canonical Profile/Leaderboard progression surfaces. Do not create a parallel points balance, a new recognition page, or a new badge system. Do not expose canonical stage in this phase; Build & Prove points alone do not determine stage, and the current member profile contract does not expose the authoritative stage.
 
