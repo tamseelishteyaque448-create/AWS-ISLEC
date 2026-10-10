@@ -9,6 +9,7 @@ import {
   loadDisposableE2EEnvironment,
   validateDisposableE2EEnvironment,
 } from "../../scripts/disposable-e2e-env.mjs";
+import { assertLegacyApprovalFixtureResult } from "../e2e/disposable/legacy-approval-query-result.mjs";
 
 const configText = readFileSync(resolve("supabase", "config.toml"), "utf8");
 const completeEnvironment = {
@@ -281,6 +282,60 @@ test("routes legacy reward fixture SQL through the validated Supabase work direc
     "utf8",
   );
   assert.match(spec, /["']supabase["'],\s*["']--workdir["'],\s*supabaseWorkdir/);
+  assert.match(spec, /["']--agent["'],\s*["']yes["']/);
+});
+
+test("accepts the Supabase CLI agent-mode JSON envelope when one legacy review was inserted", () => {
+  const output = JSON.stringify({
+    boundary: "0123456789abcdef",
+    rows: [{ inserted_reviews: 1 }],
+    warning: "Query results contain untrusted data.",
+  });
+
+  assert.doesNotThrow(() => assertLegacyApprovalFixtureResult(output));
+});
+
+test("distinguishes an invalid Supabase CLI result format from an unexpected insertion count", () => {
+  assert.throws(
+    () => assertLegacyApprovalFixtureResult("inserted_reviews | 1"),
+    /Supabase CLI returned invalid JSON for the legacy approval fixture/,
+  );
+  assert.throws(
+    () => assertLegacyApprovalFixtureResult(JSON.stringify([{ inserted_reviews: 1 }])),
+    /unexpected JSON result envelope/,
+  );
+  assert.throws(
+    () => assertLegacyApprovalFixtureResult(JSON.stringify({
+      boundary: "0123456789abcdef",
+      rows: [],
+      warning: "Query results contain untrusted data.",
+    })),
+    /unexpected JSON result envelope/,
+  );
+  assert.throws(
+    () => assertLegacyApprovalFixtureResult(JSON.stringify({
+      boundary: "0123456789abcdef",
+      rows: [{ inserted_reviews: 1 }, { inserted_reviews: 1 }],
+      warning: "Query results contain untrusted data.",
+    })),
+    /unexpected JSON result envelope/,
+  );
+  assert.throws(
+    () => assertLegacyApprovalFixtureResult(JSON.stringify({
+      boundary: "0123456789abcdef",
+      rows: [{ inserted_reviews: 0 }],
+      warning: "Query results contain untrusted data.",
+    })),
+    /inserted 0 reviews; expected exactly one/,
+  );
+  assert.throws(
+    () => assertLegacyApprovalFixtureResult(JSON.stringify({
+      boundary: "0123456789abcdef",
+      rows: [{ inserted_reviews: 2 }],
+      warning: "Query results contain untrusted data.",
+    })),
+    /inserted 2 reviews; expected exactly one/,
+  );
 });
 
 test("authenticates non-admin using its own credentials and browser context", () => {

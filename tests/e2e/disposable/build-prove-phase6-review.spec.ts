@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "./fixtures/roles";
 import { expectLocalDisposableTarget } from "./fixtures/target";
+import { assertLegacyApprovalFixtureResult } from "./legacy-approval-query-result.mjs";
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -68,7 +69,18 @@ function seedLegacyApprovedWorkItem(
   try {
     const output = execFileSync(
       process.platform === "win32" ? "npx.cmd" : "npx",
-      ["supabase", "--workdir", supabaseWorkdir, "db", "query", "--local", "--file", tempSqlPath],
+      [
+        "supabase",
+        "--workdir",
+        supabaseWorkdir,
+        "--agent",
+        "yes",
+        "db",
+        "query",
+        "--local",
+        "--file",
+        tempSqlPath,
+      ],
       {
         encoding: "utf8",
         shell: process.platform === "win32",
@@ -76,9 +88,7 @@ function seedLegacyApprovedWorkItem(
         windowsHide: true,
       },
     );
-    if (!output.includes('"inserted_reviews": 1')) {
-      throw new Error("Local legacy approval fixture was not created exactly once.");
-    }
+    assertLegacyApprovalFixtureResult(output);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
