@@ -248,11 +248,25 @@ test("Build & Prove completes SUBMITTED → CHANGES_REQUESTED → RESUBMITTED �
     console.log(`PHASE6_WORK_ITEM_ID=${mainTask.workItemId}`);
     await page.goto(`/member/learn/tasks/${mainTask.workItemId}`);
     await expect(page).toHaveURL(/\/join\?mode=login&next=/);
-    const otherMemberTaskResponse = await ownerPage.goto(
-      `/member/learn/tasks/${mainTask.workItemId}`,
-    );
-    expect(otherMemberTaskResponse?.status()).toBe(404);
+    await ownerPage.goto(`/member/learn/tasks/${mainTask.workItemId}`);
+    await expect(ownerPage.getByRole("heading", { name: "404", exact: true })).toBeVisible();
+    await expect(ownerPage.getByRole("heading", {
+      name: "This page could not be found.",
+      exact: true,
+    })).toBeVisible();
+    await expect(ownerPage.locator('meta[name="robots"][content="noindex"]')).toHaveCount(1);
+    await expect(ownerPage.getByRole("heading", { name: taskTitle, exact: true })).toHaveCount(0);
+    await expect(ownerPage.getByText("Submit, revise, and approve one practical artifact.", {
+      exact: true,
+    })).toHaveCount(0);
+    await expect(ownerPage.getByText("Disposable Phase 6 review workflow.", {
+      exact: true,
+    })).toHaveCount(0);
+    await expect(ownerPage.getByText("37 points on approval", { exact: true })).toHaveCount(0);
     await expect(ownerPage.getByRole("heading", { name: "Work approved" })).toHaveCount(0);
+    await expect(ownerPage.getByText("Your work was approved. You earned 37 points.", {
+      exact: true,
+    })).toHaveCount(0);
     const { error: assignedAwardError } = await admin.rpc("award_build_submission_reward", {
       p_work_item_id: mainTask.workItemId,
     });
