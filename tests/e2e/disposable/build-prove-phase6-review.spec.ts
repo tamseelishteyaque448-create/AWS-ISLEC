@@ -39,6 +39,10 @@ function seedLegacyApprovedWorkItem(
   workItemId: string,
   submissionId: string,
 ) {
+  const supabaseWorkdir = process.env.E2E_SUPABASE_WORKDIR;
+  if (!supabaseWorkdir) {
+    throw new Error("Legacy reward fixture requires the validated disposable Supabase work directory.");
+  }
   if (![adminId, workItemId, submissionId].every((id) => UUID_PATTERN.test(id))) {
     throw new Error("Legacy reward fixture requires UUID identifiers.");
   }
@@ -64,7 +68,7 @@ function seedLegacyApprovedWorkItem(
   try {
     const output = execFileSync(
       process.platform === "win32" ? "npx.cmd" : "npx",
-      ["supabase", "db", "query", "--local", "--file", tempSqlPath],
+      ["supabase", "--workdir", supabaseWorkdir, "db", "query", "--local", "--file", tempSqlPath],
       {
         encoding: "utf8",
         shell: process.platform === "win32",

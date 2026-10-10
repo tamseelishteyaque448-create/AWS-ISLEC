@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const root = process.cwd();
 const envFilePath = resolve(root, ".env.e2e.local");
-const configPath = resolve(root, "supabase", "config.toml");
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const credentialKeys = [
   "E2E_OWNER_EMAIL",
@@ -24,6 +23,8 @@ const projectFixtureKeys = [
 const allowedKeys = new Set([
   "E2E_ENV",
   "E2E_BASE_URL",
+  "E2E_SUPABASE_WORKDIR",
+  "E2E_SUPABASE_PROJECT_ID",
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "APP_URL",
@@ -71,7 +72,15 @@ function parseEnvironmentFile(contents) {
   return values;
 }
 
-function readLocalApiPort(configText = readFileSync(configPath, "utf8")) {
+function readProjectId(configText) {
+  const match = configText.match(/^\s*project_id\s*=\s*"([^"]+)"\s*$/m);
+  if (!match) {
+    throw new DisposableE2EConfigError("Could not determine the project ID from supabase/config.toml.");
+  }
+  return match[1];
+}
+
+function readLocalApiPort(configText) {
   let inApiSection = false;
 
   for (const line of configText.split(/\r?\n/)) {
@@ -91,6 +100,55 @@ function readLocalApiPort(configText = readFileSync(configPath, "utf8")) {
   }
 
   throw new DisposableE2EConfigError("Could not determine the local Supabase API port from supabase/config.toml.");
+}
+
+function isPathInside(directory, candidate) {
+  const pathFromDirectory = relative(directory, candidate);
+  return pathFromDirectory !== "" &&
+    pathFromDirectory !== ".." &&
+    !pathFromDirectory.startsWith(`..${sep}`) &&
+    !isAbsolute(pathFromDirectory);
+}
+
+function validateHostedWorkflowTarget(env, workdir, projectId) {
+  if (env.GITHUB_ACTIONS !== "true") return;
+
+  if (
+    env.RUNNER_ENVIRONMENT !== "github-hosted" ||
+    env.RUNNER_OS !== "Linux" ||
+    env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
+    env.GITHUB_REF !== "refs/heads/main" ||
+    env.GITHUB_REPOSITORY !== "tamseelishteyaque448-create/AWS-ISLEC"
+  ) {
+    throw new DisposableE2EConfigError(
+      "Disposable integration requires GitHub-hosted workflow_dispatch on the repository main branch.",
+    );
+  }
+
+  const runId = env.GITHUB_RUN_ID;
+  const runAttempt = env.GITHUB_RUN_ATTEMPT;
+  const runnerTemp = env.RUNNER_TEMP;
+  if (
+    !runId ||
+    !/^\d+$/.test(runId) ||
+    !runAttempt ||
+    !/^\d+$/.test(runAttempt) ||
+    !runnerTemp ||
+    !isAbsolute(runnerTemp) ||
+    !env.E2E_SUPABASE_WORKDIR ||
+    !isAbsolute(env.E2E_SUPABASE_WORKDIR) ||
+    !isPathInside(resolve(runnerTemp), workdir) ||
+    !env.E2E_ENV_FILE ||
+    !isAbsolute(env.E2E_ENV_FILE) ||
+    !isPathInside(resolve(runnerTemp), resolve(env.E2E_ENV_FILE)) ||
+    projectId !== `aws-islec-e2e-${runId}-${runAttempt}` ||
+    env.E2E_SUPABASE_PROJECT_ID !== projectId ||
+    projectId === "AWS-ISLEC"
+  ) {
+    throw new DisposableE2EConfigError(
+      "Disposable integration requires an isolated temporary Supabase project for this workflow run.",
+    );
+  }
 }
 
 function parseLoopbackHttpUrl(value, name, allowedHosts) {
@@ -130,6 +188,48 @@ export function validateDisposableE2EEnvironment(env, { configText } = {}) {
     throw new DisposableE2EConfigError("E2E_ENV must be exactly local-disposable.");
   }
 
+  if (
+    env.GITHUB_ACTIONS === "true" &&
+    (
+      env.RUNNER_ENVIRONMENT !== "github-hosted" ||
+      env.RUNNER_OS !== "Linux" ||
+      env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
+      env.GITHUB_REF !== "refs/heads/main" ||
+      env.GITHUB_REPOSITORY !== "tamseelishteyaque448-create/AWS-ISLEC"
+    )
+  ) {
+    throw new DisposableE2EConfigError(
+      "Disposable integration requires GitHub-hosted workflow_dispatch on the repository main branch.",
+    );
+  }
+
+  if (
+    env.GITHUB_ACTIONS === "true" &&
+    (
+      !env.RUNNER_TEMP ||
+      !isAbsolute(env.RUNNER_TEMP) ||
+      !env.E2E_SUPABASE_WORKDIR ||
+      !isAbsolute(env.E2E_SUPABASE_WORKDIR) ||
+      !env.E2E_ENV_FILE ||
+      !isAbsolute(env.E2E_ENV_FILE) ||
+      !isPathInside(resolve(env.RUNNER_TEMP), resolve(env.E2E_SUPABASE_WORKDIR)) ||
+      !isPathInside(resolve(env.RUNNER_TEMP), resolve(env.E2E_ENV_FILE))
+    )
+  ) {
+    throw new DisposableE2EConfigError(
+      "Disposable integration requires an isolated temporary Supabase project for this workflow run.",
+    );
+  }
+
+  const workdir = resolve(env.E2E_SUPABASE_WORKDIR || root);
+  const supabaseConfig = configText ??
+    readFileSync(resolve(workdir, "supabase", "config.toml"), "utf8");
+  const projectId = readProjectId(supabaseConfig);
+  validateHostedWorkflowTarget(env, workdir, projectId);
+  if (env.GITHUB_ACTIONS === "true" && existsSync(resolve(workdir, "supabase", ".temp", "project-ref"))) {
+    throw new DisposableE2EConfigError("Disposable integration must not use a linked Supabase project.");
+  }
+
   const appUrl = parseLoopbackHttpUrl(
     requireNonEmpty(env, "E2E_BASE_URL"),
     "E2E_BASE_URL",
@@ -144,7 +244,7 @@ export function validateDisposableE2EEnvironment(env, { configText } = {}) {
     throw new DisposableE2EConfigError("APP_URL must match E2E_BASE_URL.");
   }
 
-  const localApiPort = readLocalApiPort(configText);
+  const localApiPort = readLocalApiPort(supabaseConfig);
   const supabaseUrl = parseLoopbackHttpUrl(
     requireNonEmpty(env, "NEXT_PUBLIC_SUPABASE_URL"),
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -184,14 +284,19 @@ export function validateDisposableE2EEnvironment(env, { configText } = {}) {
     appUrl: appUrl.origin,
     appHost: appUrl.hostname,
     appPort: Number(appUrl.port),
+    supabaseWorkdir: workdir,
     supabaseUrl: supabaseUrl.origin,
     supabaseHost: supabaseUrl.hostname,
     supabasePort: localApiPort,
+    projectId,
     environment: {
       E2E_ENV: "local-disposable",
       E2E_BASE_URL: appUrl.origin,
       APP_URL: appUrl.origin,
       E2E_SUPABASE_PORT: String(localApiPort),
+      ...(env.E2E_ENV_FILE ? { E2E_ENV_FILE: resolve(env.E2E_ENV_FILE) } : {}),
+      E2E_SUPABASE_WORKDIR: workdir,
+      E2E_SUPABASE_PROJECT_ID: projectId,
       NEXT_PUBLIC_SUPABASE_URL: supabaseUrl.origin,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publishableKey,
       ...credentials,
@@ -200,7 +305,7 @@ export function validateDisposableE2EEnvironment(env, { configText } = {}) {
   };
 }
 
-export function loadDisposableE2EEnvironment(path = envFilePath) {
+export function loadDisposableE2EEnvironment(path = process.env.E2E_ENV_FILE || envFilePath) {
   let contents;
   try {
     contents = readFileSync(path, "utf8");
@@ -211,7 +316,27 @@ export function loadDisposableE2EEnvironment(path = envFilePath) {
   }
 
   const values = parseEnvironmentFile(contents);
-  return validateDisposableE2EEnvironment(values);
+  const runnerContextKeys = [
+    "GITHUB_ACTIONS",
+    "GITHUB_EVENT_NAME",
+    "GITHUB_REF",
+    "GITHUB_REPOSITORY",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_ATTEMPT",
+    "RUNNER_ENVIRONMENT",
+    "RUNNER_OS",
+    "RUNNER_TEMP",
+  ];
+  const runnerContext = Object.fromEntries(
+    runnerContextKeys
+      .filter((key) => process.env[key] !== undefined)
+      .map((key) => [key, process.env[key]]),
+  );
+  return validateDisposableE2EEnvironment({
+    ...values,
+    ...runnerContext,
+    E2E_ENV_FILE: resolve(path),
+  });
 }
 
 export function getSafeDisposableChildEnvironment(environment, inherited = process.env) {

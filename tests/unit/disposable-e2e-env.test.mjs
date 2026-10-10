@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   getSafeDisposableChildEnvironment,
+  loadDisposableE2EEnvironment,
   validateDisposableE2EEnvironment,
 } from "../../scripts/disposable-e2e-env.mjs";
 
@@ -29,6 +31,24 @@ const completeEnvironment = {
   E2E_PENDING_PROJECT_ID: "10000000-0000-4000-8000-000000000003",
   E2E_JOIN_PROOF_PROJECT_ID: "10000000-0000-4000-8000-000000000004",
 };
+const runnerTemp = resolve("runner-temp");
+const isolatedWorkdir = resolve(runnerTemp, "aws-islec-phase7b-12345-1");
+const isolatedProjectId = "aws-islec-e2e-12345-1";
+const isolatedConfigText = `project_id = "${isolatedProjectId}"\n[api]\nport = 54321`;
+const hostedWorkflowEnvironment = {
+  GITHUB_ACTIONS: "true",
+  GITHUB_EVENT_NAME: "workflow_dispatch",
+  GITHUB_REF: "refs/heads/main",
+  GITHUB_REPOSITORY: "tamseelishteyaque448-create/AWS-ISLEC",
+  GITHUB_RUN_ID: "12345",
+  GITHUB_RUN_ATTEMPT: "1",
+  RUNNER_ENVIRONMENT: "github-hosted",
+  RUNNER_OS: "Linux",
+  RUNNER_TEMP: runnerTemp,
+  E2E_ENV_FILE: resolve(runnerTemp, "phase7b", ".env.e2e.local"),
+  E2E_SUPABASE_WORKDIR: isolatedWorkdir,
+  E2E_SUPABASE_PROJECT_ID: isolatedProjectId,
+};
 
 function validate(overrides = {}) {
   return validateDisposableE2EEnvironment(
@@ -43,6 +63,100 @@ test("accepts the explicit disposable marker, loopback app, and configured local
   assert.equal(target.appUrl, "http://127.0.0.1:3001");
   assert.equal(target.supabaseUrl, "http://127.0.0.1:54321");
   assert.equal(target.supabasePort, 54321);
+});
+
+test("accepts a per-run isolated project only on the expected GitHub-hosted manual runner", () => {
+  const target = validateDisposableE2EEnvironment(
+    { ...completeEnvironment, ...hostedWorkflowEnvironment },
+    { configText: isolatedConfigText },
+  );
+
+  assert.equal(target.projectId, isolatedProjectId);
+  assert.equal(target.supabaseWorkdir, isolatedWorkdir);
+});
+
+test("rejects a non-hosted runner, non-manual event, or non-main revision", () => {
+  for (const [key, value] of [
+    ["RUNNER_ENVIRONMENT", "self-hosted"],
+    ["GITHUB_EVENT_NAME", "push"],
+    ["GITHUB_REF", "refs/heads/feature"],
+    ["GITHUB_REPOSITORY", "someone-else/AWS-ISLEC"],
+  ]) {
+    assert.throws(
+      () => validateDisposableE2EEnvironment(
+        { ...completeEnvironment, ...hostedWorkflowEnvironment, [key]: value },
+        { configText: isolatedConfigText },
+      ),
+      /GitHub-hosted workflow_dispatch on the repository main branch/,
+    );
+  }
+});
+
+test("rejects missing, non-temporary, or non-unique CI Supabase targets", () => {
+  for (const [key, value] of [
+    ["E2E_SUPABASE_WORKDIR", undefined],
+    ["E2E_SUPABASE_WORKDIR", resolve("supabase")],
+    ["E2E_SUPABASE_PROJECT_ID", "AWS-ISLEC"],
+    ["E2E_SUPABASE_PROJECT_ID", "aws-islec-e2e-other-run"],
+  ]) {
+    assert.throws(
+      () => validateDisposableE2EEnvironment(
+        { ...completeEnvironment, ...hostedWorkflowEnvironment, [key]: value },
+        { configText: isolatedConfigText },
+      ),
+      /isolated temporary Supabase project for this workflow run/,
+    );
+  }
+});
+
+test("the env-file loader validates the actual GitHub runner context", () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), "phase7b-runner-context-"));
+  const workdir = join(tempRoot, "supabase-project");
+  const configDir = join(workdir, "supabase");
+  const envFile = join(workdir, ".env.e2e.local");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "config.toml"), isolatedConfigText);
+  writeFileSync(
+    envFile,
+    Object.entries({
+      ...completeEnvironment,
+      SUPABASE_SECRET_KEY: undefined,
+      E2E_SUPABASE_WORKDIR: workdir,
+      E2E_SUPABASE_PROJECT_ID: isolatedProjectId,
+    })
+      .filter(([, value]) => typeof value === "string")
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n"),
+  );
+
+  const runnerVariables = {
+    GITHUB_ACTIONS: "true",
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_REPOSITORY: "tamseelishteyaque448-create/AWS-ISLEC",
+    GITHUB_RUN_ID: "12345",
+    GITHUB_RUN_ATTEMPT: "1",
+    RUNNER_ENVIRONMENT: "self-hosted",
+    RUNNER_OS: "Linux",
+    RUNNER_TEMP: tempRoot,
+    E2E_ENV_FILE: envFile,
+  };
+  const originalValues = Object.fromEntries(
+    Object.keys(runnerVariables).map((key) => [key, process.env[key]]),
+  );
+  try {
+    Object.assign(process.env, runnerVariables);
+    assert.throws(
+      () => loadDisposableE2EEnvironment(envFile),
+      /GitHub-hosted workflow_dispatch on the repository main branch/,
+    );
+  } finally {
+    for (const [key, value] of Object.entries(originalValues)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("rejects a missing environment marker", () => {
@@ -159,6 +273,14 @@ test("removes inherited hosted targets and replaces them with validated local va
 test("keeps disposable server reuse disabled", () => {
   const config = readFileSync(resolve("playwright.disposable.config.ts"), "utf8");
   assert.match(config, /reuseExistingServer:\s*false/);
+});
+
+test("routes legacy reward fixture SQL through the validated Supabase work directory", () => {
+  const spec = readFileSync(
+    resolve("tests", "e2e", "disposable", "build-prove-phase6-review.spec.ts"),
+    "utf8",
+  );
+  assert.match(spec, /["']supabase["'],\s*["']--workdir["'],\s*supabaseWorkdir/);
 });
 
 test("authenticates non-admin using its own credentials and browser context", () => {

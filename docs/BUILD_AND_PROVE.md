@@ -583,7 +583,7 @@ Hosted QA/production parity: NOT VERIFIED
 
 **Next action:**
 
-`IMPLEMENT BUILD & PROVE PHASE 7B — RECOGNITION / PROGRESSION UI`
+`VERIFY BUILD & PROVE PHASE 7B` through the manual GitHub-hosted ephemeral integration workflow documented in [TESTING.md](./TESTING.md). Do not run the disposable suite or start Docker/WSL on this workstation.
 
 The local disposable database is not reported as clean. The repository has no approved reversible cleanup procedure for these protected Build & Prove history/reward records and their point/stage effects. Do not delete history, subtract points, or reverse stage as cleanup.
 

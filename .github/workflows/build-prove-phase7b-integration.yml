@@ -1,0 +1,99 @@
+name: Build & Prove Phase 7B ephemeral integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase7b:
+    name: Isolated Build & Prove lifecycle integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      SUPABASE_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Check out the dispatched revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify runner, revision, CLI, and offline guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = "true"
+          test "$RUNNER_ENVIRONMENT" = "github-hosted"
+          test "$RUNNER_OS" = "Linux"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_REPOSITORY" = "tamseelishteyaque448-create/AWS-ISLEC"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          cli_version="$(npx supabase --version)"
+          test "$cli_version" = "2.119.0"
+          npm run test:e2e:disposable:guard
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Create the per-run Supabase work directory
+        run: node scripts/prepare-phase7b-integration.mjs
+
+      - name: Start the isolated local Supabase stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          if startup_output="$(npx supabase --workdir "$E2E_SUPABASE_WORKDIR" start 2>&1)"; then
+            echo "Isolated Supabase stack started; credential-bearing CLI output was withheld."
+          else
+            status=$?
+            echo "::error::Isolated Supabase stack startup failed (exit $status); CLI output was withheld to prevent credential exposure."
+            exit "$status"
+          fi
+
+      - name: Apply repository migrations and seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if migration_output="$(npx supabase --workdir "$E2E_SUPABASE_WORKDIR" db reset --local --yes 2>&1)"; then
+            echo "Repository migrations and seed applied to the isolated local database."
+          else
+            status=$?
+            echo "::error::Isolated local migration/seed reset failed (exit $status)."
+            exit "$status"
+          fi
+
+      - name: Provision temporary Auth identities and prove isolation
+        run: node scripts/provision-phase7b-integration.mjs
+
+      - name: Run focused Build & Prove Phase 7B integration
+        run: npm run test:e2e:disposable -- tests/e2e/disposable/build-prove-phase6-review.spec.ts
+
+      - name: Stop the isolated Supabase stack
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${E2E_SUPABASE_WORKDIR:-}" || ! -d "$E2E_SUPABASE_WORKDIR/supabase" ]]; then
+            echo "No isolated Supabase work directory was started; cleanup is not required."
+            exit 0
+          fi
+          if cleanup_output="$(npx supabase --workdir "$E2E_SUPABASE_WORKDIR" stop --no-backup 2>&1)"; then
+            echo "Isolated Supabase stack stopped; the runner-local database will be destroyed with this hosted runner."
+          else
+            status=$?
+            echo "::error::Isolated Supabase stack cleanup failed (exit $status); the hosted runner remains the final isolation boundary."
+            exit "$status"
+          fi
